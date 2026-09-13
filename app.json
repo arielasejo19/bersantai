@@ -1,0 +1,13 @@
+{
+  "expo": {
+    "name": "Bersantai",
+    "slug": "bersantai",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "bersantai",
+    "assetBundlePatterns": ["**/*"],
+    "web": { "bundler": "metro", "output": "static" },
+    "plugins": ["expo-router"]
+  }
+}
