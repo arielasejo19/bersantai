@@ -5,8 +5,6 @@ import { FeatureCard } from "../components/FeatureCard";
 import { SectionHeading } from "../components/SectionHeading";
 import { colors } from "../constants/theme";
 
-const logo = require("../assets/bersantai-logo.jpg");
-
 export default function HomeScreen() {
   const { width } = useWindowDimensions();
   const desktop = width >= 900;
@@ -14,7 +12,7 @@ export default function HomeScreen() {
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.content}>
       <View style={[styles.nav, desktop && styles.navWide]}>
-        <Image source={logo} style={styles.logo} resizeMode="contain" />
+        <View style={styles.brandMark}><Text style={styles.brandText}>BERSANTAI</Text></View>
         <View style={styles.navLinks}>
           <Pressable><Text style={styles.navLink}>HOME</Text></Pressable>
           <Pressable onPress={() => router.push("/property")}><Text style={styles.navLink}>THE VILLA</Text></Pressable>
@@ -24,7 +22,10 @@ export default function HomeScreen() {
 
       <View style={[styles.hero, desktop && styles.heroDesktop]}>
         <View style={[styles.heroVisual, desktop && styles.heroVisualDesktop]}>
-          <Image source={logo} style={styles.heroLogo} resizeMode="contain" />
+          <View style={styles.heroLogoPlaceholder}>
+            <Text style={styles.heroLogoText}>BERSANTAI</Text>
+            <Text style={styles.heroLogoSub}>PRIVATE RESORT</Text>
+          </View>
           <View style={styles.visualOverlay} />
           <View style={styles.heroBadge}><Text style={styles.badgeText}>PRIVATE RESORT • BALI</Text></View>
         </View>
@@ -66,35 +67,15 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  page: { flex: 1, backgroundColor: colors.cream },
-  content: { paddingBottom: 40 },
-  nav: { height: 84, paddingHorizontal: 20, flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: colors.white },
-  navWide: { paddingHorizontal: 64 },
-  logo: { width: 130, height: 62 },
-  navLinks: { flexDirection: "row", gap: 22 },
-  navLink: { color: colors.tealLight, fontSize: 12, letterSpacing: 1.7, fontWeight: "700" },
-  hero: { backgroundColor: colors.white },
-  heroDesktop: { flexDirection: "row", minHeight: 600 },
-  heroVisual: { minHeight: 390, backgroundColor: colors.teal, alignItems: "center", justifyContent: "center", overflow: "hidden", position: "relative" },
-  heroVisualDesktop: { flex: 1, minHeight: 600 },
-  heroLogo: { width: 280, height: 280, opacity: 0.96 },
-  visualOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(1,51,50,0.30)" },
-  heroBadge: { position: "absolute", left: 24, bottom: 24, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20, borderWidth: 1, borderColor: colors.goldLight },
-  badgeText: { color: colors.white, fontSize: 10, letterSpacing: 1.8, fontWeight: "700" },
-  heroCopy: { padding: 34, gap: 16, backgroundColor: colors.white },
-  heroCopyDesktop: { flex: 1, justifyContent: "center", paddingHorizontal: 64, paddingVertical: 56 },
-  eyebrow: { color: colors.gold, fontSize: 11, fontWeight: "800", letterSpacing: 2.2 },
-  heroTitle: { color: colors.teal, fontSize: 48, lineHeight: 54, fontWeight: "600" },
-  heroDescription: { color: colors.muted, fontSize: 16, lineHeight: 26, maxWidth: 540 },
-  heroActions: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 6 },
-  section: { paddingHorizontal: 24, paddingVertical: 64, gap: 34, maxWidth: 1200, width: "100%", alignSelf: "center" },
-  featureRow: { flexDirection: "row", flexWrap: "wrap", gap: 16 },
-  cta: { marginHorizontal: 20, marginTop: 12, padding: 30, borderRadius: 24, backgroundColor: colors.teal, gap: 24, alignItems: "flex-start" },
-  ctaDesktop: { marginHorizontal: 64, paddingHorizontal: 54, paddingVertical: 42, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  ctaCopy: { maxWidth: 650, gap: 9 },
-  ctaTitle: { color: colors.white, fontSize: 30, lineHeight: 37, fontWeight: "600" },
-  ctaText: { color: "#D8E4E2", fontSize: 15, lineHeight: 24 },
-  footer: { padding: 42, alignItems: "center", gap: 7 },
-  footerBrand: { color: colors.teal, fontSize: 14, fontWeight: "800", letterSpacing: 3 },
-  footerText: { color: colors.muted, fontSize: 10, letterSpacing: 1.8 },
+  page: { flex: 1, backgroundColor: colors.cream }, content: { paddingBottom: 40 },
+  nav: { height: 84, paddingHorizontal: 20, flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: colors.white }, navWide: { paddingHorizontal: 64 },
+  brandMark: { paddingVertical: 8 }, brandText: { color: colors.teal, fontSize: 16, fontWeight: "800", letterSpacing: 3 }, navLinks: { flexDirection: "row", gap: 22 }, navLink: { color: colors.tealLight, fontSize: 12, letterSpacing: 1.7, fontWeight: "700" },
+  hero: { backgroundColor: colors.white }, heroDesktop: { flexDirection: "row", minHeight: 600 },
+  heroVisual: { minHeight: 390, backgroundColor: colors.teal, alignItems: "center", justifyContent: "center", overflow: "hidden", position: "relative" }, heroVisualDesktop: { flex: 1, minHeight: 600 },
+  heroLogoPlaceholder: { width: 280, height: 280, borderRadius: 140, borderWidth: 1, borderColor: colors.goldLight, alignItems: "center", justifyContent: "center" }, heroLogoText: { color: colors.white, fontSize: 27, fontWeight: "800", letterSpacing: 5 }, heroLogoSub: { color: colors.goldLight, fontSize: 9, letterSpacing: 3, marginTop: 8, fontWeight: "700" }, visualOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(1,51,50,0.18)" },
+  heroBadge: { position: "absolute", left: 24, bottom: 24, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20, borderWidth: 1, borderColor: colors.goldLight }, badgeText: { color: colors.white, fontSize: 10, letterSpacing: 1.8, fontWeight: "700" },
+  heroCopy: { padding: 34, gap: 16, backgroundColor: colors.white }, heroCopyDesktop: { flex: 1, justifyContent: "center", paddingHorizontal: 64, paddingVertical: 56 }, eyebrow: { color: colors.gold, fontSize: 11, fontWeight: "800", letterSpacing: 2.2 }, heroTitle: { color: colors.teal, fontSize: 48, lineHeight: 54, fontWeight: "600" }, heroDescription: { color: colors.muted, fontSize: 16, lineHeight: 26, maxWidth: 540 }, heroActions: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 6 },
+  section: { paddingHorizontal: 24, paddingVertical: 64, gap: 34, maxWidth: 1200, width: "100%", alignSelf: "center" }, featureRow: { flexDirection: "row", flexWrap: "wrap", gap: 16 },
+  cta: { marginHorizontal: 20, marginTop: 12, padding: 30, borderRadius: 24, backgroundColor: colors.teal, gap: 24, alignItems: "flex-start" }, ctaDesktop: { marginHorizontal: 64, paddingHorizontal: 54, paddingVertical: 42, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, ctaCopy: { maxWidth: 650, gap: 9 }, ctaTitle: { color: colors.white, fontSize: 30, lineHeight: 37, fontWeight: "600" }, ctaText: { color: "#D8E4E2", fontSize: 15, lineHeight: 24 },
+  footer: { padding: 42, alignItems: "center", gap: 7 }, footerBrand: { color: colors.teal, fontSize: 14, fontWeight: "800", letterSpacing: 3 }, footerText: { color: colors.muted, fontSize: 10, letterSpacing: 1.8 },
 });
