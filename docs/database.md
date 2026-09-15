@@ -1,5 +1,17 @@
 # Database
 
+The MySQL schema includes the original foundation tables plus the villa management model:
+
+- `roles`: supported account roles (`guest`, `admin`, `host`, `receptionist`).
+- `villas`: property details, pricing, capacity, ownership, and lifecycle/availability status.
+- `villa_amenities` and `villa_photos`: normalized property content.
+- `villa_receptionist_assignments`: explicit receptionist-to-villa access.
+- `reservations`: guest, stay dates, booking status, and check-in/check-out timestamps.
+- `system_settings`: global configuration such as the `operating_mode` (`airbnb` or `hotel`).
+
+Run `npm run migrate` after pulling the villa management migration. Villa access is enforced by the API repository queries in addition to route-level role checks.
+# Database
+
 Bersantai uses MySQL as the primary database. The backend uses `mysql2` through Knex for query execution, migrations, seeds, and future transaction support.
 
 ## Environment

@@ -8,6 +8,7 @@ const router = useRouter();
 const route = useRoute();
 const authStore = useAuthStore();
 const { loading, error } = storeToRefs(authStore);
+const isHostLogin = route.name === 'host-login';
 
 const form = reactive({
   email: '',
@@ -15,16 +16,23 @@ const form = reactive({
 });
 
 async function submit() {
-  await authStore.login(form);
-  await router.push(route.query.redirect?.toString() || '/profile');
+  const loggedInUser = await authStore.login(form);
+  const role = String(loggedInUser.role || '').trim().toLowerCase();
+  const isManagementRole = ['admin', 'host', 'receptionist'].includes(role);
+  const destination = isManagementRole
+    ? '/management'
+    : route.query.redirect?.toString() || '/profile';
+
+  await router.push(destination);
 }
 </script>
 
 <template>
   <main class="auth-shell">
     <section class="auth-panel" aria-labelledby="login-title">
-      <p class="eyebrow">Welcome back</p>
-      <h1 id="login-title">Log in</h1>
+      <p class="eyebrow">{{ isHostLogin ? 'Bersantai partner portal' : 'Welcome back' }}</p>
+      <h1 id="login-title">{{ isHostLogin ? 'Host login' : 'Log in' }}</h1>
+      <p v-if="isHostLogin" class="login-intro">Manage your villa, availability, and guest stays from one calm workspace.</p>
 
       <form class="form-stack" @submit.prevent="submit">
         <label>

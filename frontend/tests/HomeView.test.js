@@ -17,14 +17,17 @@ describe('HomeView', () => {
     setActivePinia(createPinia());
   });
 
-  it('renders the Bersantai foundation status', () => {
+  it('renders the public landing page', () => {
     const wrapper = mount(HomeView, {
       global: {
         plugins: [createPinia()]
       }
     });
 
-    expect(wrapper.text()).toContain('Bersantai foundation');
-    expect(wrapper.text()).toContain('Vue ready');
+    expect(wrapper.text()).toContain('Find your');
+    expect(wrapper.text()).toContain('island rhythm');
+    expect(wrapper.text()).toContain('Choose your Bali');
+    expect(wrapper.text()).toContain('Stays worth');
+    expect(wrapper.findAll('.villa-card')).toHaveLength(3);
   });
 });

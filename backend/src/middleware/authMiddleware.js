@@ -39,3 +39,14 @@ export async function requireAuth(request, _response, next) {
     next(new ApiError(401, 'Authentication required'));
   }
 }
+
+export function requireRole(...allowedRoles) {
+  return (request, _response, next) => {
+    if (!request.user || !allowedRoles.includes(request.user.role)) {
+      next(new ApiError(403, 'You do not have permission to perform this action'));
+      return;
+    }
+
+    next();
+  };
+}

@@ -51,7 +51,10 @@ async function logout() {
           <p class="eyebrow">Your account</p>
           <h1 id="profile-title">Profile</h1>
         </div>
-        <RouterLink class="text-link" to="/">Home</RouterLink>
+        <div class="profile-links">
+          <RouterLink v-if="['admin', 'host', 'receptionist'].includes(user?.role)" class="text-link" to="/management">Manage villas</RouterLink>
+          <RouterLink class="text-link" to="/">Home</RouterLink>
+        </div>
       </div>
 
       <form class="form-stack" @submit.prevent="saveProfile">

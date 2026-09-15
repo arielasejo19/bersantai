@@ -4,6 +4,7 @@ import HomeView from '@/views/HomeView.vue';
 import LoginView from '@/views/LoginView.vue';
 import ProfileView from '@/views/ProfileView.vue';
 import RegisterView from '@/views/RegisterView.vue';
+import ManagementView from '@/views/ManagementView.vue';
 
 const router = createRouter({
   history: createWebHistory(),
@@ -20,6 +21,12 @@ const router = createRouter({
       meta: { guestOnly: true }
     },
     {
+      path: '/host/login',
+      name: 'host-login',
+      component: LoginView,
+      meta: { guestOnly: true, hostLogin: true }
+    },
+    {
       path: '/register',
       name: 'register',
       component: RegisterView,
@@ -30,6 +37,12 @@ const router = createRouter({
       name: 'profile',
       component: ProfileView,
       meta: { requiresAuth: true }
+    },
+    {
+      path: '/management',
+      name: 'management',
+      component: ManagementView,
+      meta: { requiresAuth: true, managementOnly: true }
     }
   ]
 });
@@ -41,6 +54,10 @@ router.beforeEach(async (to) => {
 
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
     return { name: 'login', query: { redirect: to.fullPath } };
+  }
+
+  if (to.meta.managementOnly && !['admin', 'host', 'receptionist'].includes(authStore.user?.role)) {
+    return { name: 'profile' };
   }
 
   if (to.meta.guestOnly && authStore.isAuthenticated) {
