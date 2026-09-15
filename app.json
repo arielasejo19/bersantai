@@ -6,8 +6,16 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "scheme": "bersantai",
-    "assetBundlePatterns": ["**/*"],
-    "web": { "bundler": "metro", "output": "static" },
-    "plugins": ["expo-router"]
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font"
+    ]
   }
 }
