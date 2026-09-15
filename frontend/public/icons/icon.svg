@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Bersantai icon">
+  <rect width="512" height="512" rx="96" fill="#0e5f4f"/>
+  <circle cx="384" cy="128" r="54" fill="#f4b45f"/>
+  <path d="M84 322c72-102 143-142 214-118 42 14 78 48 130 103v89H84z" fill="#f7f3ea"/>
+  <path d="M84 396h344v36H84z" fill="#64a98f"/>
+  <path d="M137 287c47-45 92-59 137-42 28 10 55 32 88 67" fill="none" stroke="#0e5f4f" stroke-width="22" stroke-linecap="round"/>
+</svg>
