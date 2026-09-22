@@ -5,6 +5,9 @@ import LoginView from '@/views/LoginView.vue';
 import ProfileView from '@/views/ProfileView.vue';
 import RegisterView from '@/views/RegisterView.vue';
 import ManagementView from '@/views/ManagementView.vue';
+import OAuthCallbackView from '@/views/OAuthCallbackView.vue';
+import VillaEditorView from '@/views/VillaEditorView.vue';
+import VillaDetailView from '@/views/VillaDetailView.vue';
 
 const router = createRouter({
   history: createWebHistory(),
@@ -27,6 +30,11 @@ const router = createRouter({
       meta: { guestOnly: true, hostLogin: true }
     },
     {
+      path: '/auth/callback',
+      name: 'oauth-callback',
+      component: OAuthCallbackView
+    },
+    {
       path: '/register',
       name: 'register',
       component: RegisterView,
@@ -36,6 +44,11 @@ const router = createRouter({
       path: '/booking',
       name: 'booking',
       component: () => import('@/views/BookingView.vue')
+    },
+    {
+      path: '/villas/:villaId',
+      name: 'villa-detail',
+      component: VillaDetailView
     },
     {
       path: '/profile',
@@ -48,6 +61,18 @@ const router = createRouter({
       name: 'management',
       component: ManagementView,
       meta: { requiresAuth: true, managementOnly: true }
+    }
+    ,{
+      path: '/management/villas/new',
+      name: 'villa-create',
+      component: VillaEditorView,
+      meta: { requiresAuth: true, managementOnly: true, villaEditor: true }
+    },
+    {
+      path: '/management/villas/:villaId/edit',
+      name: 'villa-edit',
+      component: VillaEditorView,
+      meta: { requiresAuth: true, managementOnly: true, villaEditor: true }
     }
   ]
 });
@@ -65,7 +90,14 @@ router.beforeEach(async (to) => {
     return { name: 'profile' };
   }
 
+  if (to.meta.villaEditor && !['admin', 'host'].includes(authStore.user?.role)) {
+    return { name: 'management' };
+  }
+
   if (to.meta.guestOnly && authStore.isAuthenticated) {
+    if (to.meta.hostLogin && ['admin', 'host', 'receptionist'].includes(authStore.user?.role)) {
+      return { name: 'management' };
+    }
     return { name: 'profile' };
   }
 

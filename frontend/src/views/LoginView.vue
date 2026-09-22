@@ -1,15 +1,15 @@
 <script setup>
-import { reactive } from 'vue';
+import { reactive, ref } from 'vue';
 import { useRoute, useRouter, RouterLink } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { useAuthStore } from '@/stores/authStore';
-import { authService } from '@/services/authService';
 
 const router = useRouter();
 const route = useRoute();
 const authStore = useAuthStore();
 const { loading, error } = storeToRefs(authStore);
 const isHostLogin = route.name === 'host-login';
+const socialProvider = ref('');
 
 const form = reactive({
   email: '',
@@ -17,11 +17,14 @@ const form = reactive({
 });
 
 async function socialLogin(provider) {
-  const email = form.email || window.prompt(`Development ${provider} email`);
-  if (!email) return;
-  const loggedInUser = await authService.social({ provider, providerUserId: `${provider}-${email}`, email, displayName: email.split('@')[0] });
-  authStore.user = loggedInUser.user;
-  await router.push('/profile');
+  socialProvider.value = provider;
+  try {
+    const callbackUrl = new URL('/auth/callback', window.location.origin);
+    if (route.query.redirect) callbackUrl.searchParams.set('redirect', route.query.redirect.toString());
+    await authStore.startSocialLogin(provider, callbackUrl.toString());
+  } finally {
+    socialProvider.value = '';
+  }
 }
 
 async function submit() {
@@ -37,8 +40,10 @@ async function submit() {
 </script>
 
 <template>
-  <main class="auth-shell">
+  <main class="auth-shell" :class="{ 'host-auth-shell': isHostLogin }">
+    <div v-if="isHostLogin" class="host-nature" aria-hidden="true"><span class="host-leaf host-leaf-one"></span><span class="host-leaf host-leaf-two"></span><span class="host-leaf host-leaf-three"></span><span class="host-leaf host-leaf-four"></span><span class="host-light host-light-one"></span><span class="host-light host-light-two"></span><span class="thai-ornament thai-ornament-top"></span><span class="thai-ornament thai-ornament-bottom"></span></div>
     <section class="auth-panel" aria-labelledby="login-title">
+      <RouterLink class="auth-brand" to="/" aria-label="Bersantai home"><img :src="'/icons/' + 'bersantai-logo.png'" alt="Bersantai Bali Private Resort" /></RouterLink>
       <p class="eyebrow">{{ isHostLogin ? 'Bersantai partner portal' : 'Welcome back' }}</p>
       <h1 id="login-title">{{ isHostLogin ? 'Host login' : 'Log in' }}</h1>
       <p v-if="isHostLogin" class="login-intro">Manage your villa, availability, and guest stays from one calm workspace.</p>
@@ -56,12 +61,12 @@ async function submit() {
 
         <p v-if="error" class="error" role="alert">{{ error }}</p>
 
-        <button class="primary-button" type="submit" :disabled="loading">
+        <button class="primary-button" :class="{ 'host-login-button': isHostLogin }" type="submit" :disabled="loading">
           {{ loading ? 'Logging in...' : 'Log in' }}
         </button>
       </form>
 
-      <div class="social-login"><span>Or continue with</span><div><button class="secondary-button" type="button" @click="socialLogin('google')">Continue with Google</button><button class="secondary-button" type="button" @click="socialLogin('facebook')">Continue with Facebook</button></div></div>
+      <div class="social-login"><span>Or continue with</span><div><button class="secondary-button social-button" type="button" :disabled="loading" @click="socialLogin('google')"><span class="provider-icon provider-google" aria-hidden="true">G</span>{{ socialProvider === 'google' ? 'Connecting...' : 'Login with Google' }}</button><button class="secondary-button social-button" type="button" :disabled="loading" @click="socialLogin('facebook')"><span class="provider-icon provider-facebook" aria-hidden="true">f</span>{{ socialProvider === 'facebook' ? 'Connecting...' : 'Login with Facebook' }}</button></div></div>
 
       <p class="form-footer">
         New to Bersantai?

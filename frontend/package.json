@@ -11,6 +11,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.116.0",
     "@vitejs/plugin-vue": "^5.2.4",
     "pinia": "^2.3.1",
     "vite": "^6.3.6",

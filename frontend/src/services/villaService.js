@@ -2,12 +2,15 @@ import { apiClient } from './apiClient';
 
 export const villaService = {
   list() { return apiClient.get('/villas'); },
+  get(id) { return apiClient.get(`/villas/${id}`); },
   listPublic() { return apiClient.get('/villas/public'); },
+  getPublic(id) { return apiClient.get(`/villas/public/${id}`); },
   availability(params) { return apiClient.get(`/villas/availability?${new URLSearchParams(params)}`); },
   listPublicTypes() { return apiClient.get('/villa-types/public'); },
   book(payload) { return apiClient.post('/villas/bookings', payload); },
   create(payload) { return apiClient.post('/villas', payload); },
   update(id, payload) { return apiClient.put(`/villas/${id}`, payload); },
+  uploadMedia(id, formData) { return apiClient.post(`/villas/${id}/media`, formData); },
   reservations(id) { return apiClient.get(`/villas/${id}/reservations`); },
   allReservations() { return apiClient.get('/villas/reservations'); },
   updateReservation(villaId, reservationId, status) { return apiClient.request(`/villas/${villaId}/reservations/${reservationId}/status`, { method: 'PATCH', body: { status } }); }

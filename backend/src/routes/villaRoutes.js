@@ -1,11 +1,15 @@
 import { Router } from 'express';
-import { assignReceptionist, assignReservationVilla, checkAvailability, createAmenity, createBooking, createPhoto, createVilla, inviteStaffMember, listAccounts, listAllReservations, listPublicVillas, listReservations, listVillas, showVilla, updateReservationStatus, updateVilla } from '../controllers/villaController.js';
+import { assignReceptionist, assignReservationVilla, checkAvailability, createAmenity, createBooking, createPhoto, createVilla, inviteStaffMember, listAccounts, listAllReservations, listPublicVillas, listReservations, listVillas, showPublicVilla, showVilla, updateReservationStatus, updateVilla } from '../controllers/villaController.js';
 import { optionalAuth, requireAuth, requireRole } from '../middleware/authMiddleware.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { getConfig, updateConfig } from '../controllers/settingsController.js';
+import multer from 'multer';
+import { uploadMedia } from '../controllers/villaController.js';
 
 const router = Router();
+const upload = multer({ storage: multer.memoryStorage(), limits: { files: 20, fileSize: 50 * 1024 * 1024 } });
 router.get('/public', asyncHandler(listPublicVillas));
+router.get('/public/:villaId', asyncHandler(showPublicVilla));
 router.get('/availability', asyncHandler(checkAvailability));
 router.get('/config/public', asyncHandler(getConfig));
 router.post('/bookings', optionalAuth, asyncHandler(createBooking));
@@ -21,6 +25,7 @@ router.get('/:villaId', asyncHandler(showVilla));
 router.put('/:villaId', requireRole('admin', 'host'), asyncHandler(updateVilla));
 router.post('/:villaId/amenities', requireRole('admin', 'host'), asyncHandler(createAmenity));
 router.post('/:villaId/photos', requireRole('admin', 'host'), asyncHandler(createPhoto));
+router.post('/:villaId/media', requireRole('admin', 'host'), upload.array('media', 20), asyncHandler(uploadMedia));
 router.post('/:villaId/receptionists', requireRole('admin'), asyncHandler(assignReceptionist));
 router.get('/:villaId/reservations', requireRole('admin', 'host', 'receptionist'), asyncHandler(listReservations));
 router.patch('/reservations/:reservationId/assign', requireRole('admin', 'receptionist'), asyncHandler(assignReservationVilla));

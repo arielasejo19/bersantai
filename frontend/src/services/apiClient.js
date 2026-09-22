@@ -24,7 +24,7 @@ export const apiClient = {
       headers
     };
 
-    if (options.body && typeof options.body !== 'string') {
+    if (options.body && typeof options.body !== 'string' && !(typeof FormData !== 'undefined' && options.body instanceof FormData)) {
       headers['Content-Type'] = 'application/json';
       requestOptions.body = JSON.stringify(options.body);
     }

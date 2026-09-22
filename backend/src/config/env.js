@@ -15,8 +15,10 @@ export const env = {
   },
   jwtSecret: process.env.JWT_SECRET,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
-  authCookieName: process.env.AUTH_COOKIE_NAME || 'bersantai_session'
-  ,socialAuthDevMode: process.env.SOCIAL_AUTH_DEV_MODE === 'true'
+  authCookieName: process.env.AUTH_COOKIE_NAME || 'bersantai_session',
+  supabaseUrl: process.env.SUPABASE_URL,
+  supabaseAnonKey: process.env.SUPABASE_ANON_KEY
+  ,socialAuthDevMode: process.env.SOCIAL_AUTH_DEV_MODE === 'true' || (process.env.NODE_ENV || 'development') !== 'production'
 };
 
 export function hasDatabaseConfig() {

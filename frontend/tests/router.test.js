@@ -33,4 +33,16 @@ describe('router guards', () => {
 
     expect(router.currentRoute.value.name).toBe('login');
   });
+
+  it('sends authenticated management users from host login to the portal', async () => {
+    const { default: router } = await import('../src/router');
+    const store = useAuthStore();
+    store.initialized = true;
+    store.user = { role: 'host' };
+
+    await router.push('/host/login');
+    await router.isReady();
+
+    expect(router.currentRoute.value.name).toBe('management');
+  });
 });

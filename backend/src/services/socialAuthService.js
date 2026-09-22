@@ -6,8 +6,7 @@ import { getDatabase } from '../config/database.js';
 import { createAuthToken } from './tokenService.js';
 import { ApiError } from '../utils/apiError.js';
 
-export async function socialLogin(input) {
-  if (!env.socialAuthDevMode) throw new ApiError(501, 'Social login providers are not configured');
+async function createSocialSession(input) {
   if (!['google', 'facebook'].includes(input.provider)) throw new ApiError(400, 'Unsupported social provider');
   const db = getDatabase();
   const identity = await db('social_identities').where({ provider: input.provider, provider_user_id: input.providerUserId }).first();
@@ -20,4 +19,23 @@ export async function socialLogin(input) {
   const userId = user.id;
   await db('social_identities').insert({ user_id: userId, provider: input.provider, provider_user_id: input.providerUserId, email: input.email }).onConflict(['provider', 'provider_user_id']).merge({ user_id: userId, email: input.email });
   return { user: await findUserWithProfileById(userId), token: createAuthToken(await findUserWithProfileById(userId)) };
+}
+
+export async function socialLogin(input) {
+  if (!env.socialAuthDevMode) throw new ApiError(501, 'Social login providers are not configured');
+  return createSocialSession(input);
+}
+
+export async function socialLoginWithSupabase(accessToken) {
+  if (!env.supabaseUrl || !env.supabaseAnonKey) throw new ApiError(501, 'Supabase social login is not configured');
+  const response = await fetch(`${env.supabaseUrl.replace(/\/$/, '')}/auth/v1/user`, {
+    headers: { apikey: env.supabaseAnonKey, Authorization: `Bearer ${accessToken}` }
+  });
+  if (!response.ok) throw new ApiError(401, 'The social login session is invalid or expired');
+  const identity = await response.json();
+  const provider = identity.app_metadata?.provider;
+  const email = identity.email;
+  if (!identity.id || !email || !['google', 'facebook'].includes(provider)) throw new ApiError(400, 'Unsupported social login identity');
+  const metadata = identity.user_metadata || {};
+  return createSocialSession({ provider, providerUserId: identity.id, email, displayName: metadata.full_name || metadata.name || email.split('@')[0] });
 }

@@ -4,32 +4,20 @@ import { useRouter } from 'vue-router';
 import VillaCard from '@/components/VillaCard.vue';
 import { serviceService } from '@/services/serviceService';
 import { villaService } from '@/services/villaService';
+import { formatCurrency, resolveMediaUrl } from '@/services/currency';
 
 const officialLogo = '/icons/bersantai-logo.png';
 const router = useRouter();
 
 const fallbackVillas = [
-  {
-    name: 'The Canopy House', location: 'Ubud, Bali', detail: '2 guests · 1 bedroom', price: '$240',
-    image: 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1200&q=85'
-  },
-  {
-    name: 'Tide & Timber', location: 'Nusa Lembongan, Bali', detail: '4 guests · 2 bedrooms', price: '$310',
-    image: 'https://images.unsplash.com/photo-1602002418082-a4443e081dd1?auto=format&fit=crop&w=1200&q=85'
-  },
-  {
-    name: 'Sundown Sanctuary', location: 'Lombok, Indonesia', detail: '6 guests · 3 bedrooms', price: '$420',
-    image: 'https://images.unsplash.com/photo-1613490493576-7fde63acd811?auto=format&fit=crop&w=1200&q=85'
-  }
+  { name: 'Java Mist House', location: 'Kintamani, Bali', detail: '2 guests · 1 bedroom', price: '₱12,000', image: '/images/villas/java-mountain.svg' },
+  { name: 'Volcano View Villa', location: 'Munduk, Bali', detail: '4 guests · 2 bedrooms', price: '₱15,500', image: '/images/villas/sulawesi-mountain.svg' },
+  { name: 'Highland Sanctuary', location: 'Bedugul, Bali', detail: '6 guests · 3 bedrooms', price: '₱21,000', image: '/images/villas/sumatra-mountain.svg' }
 ];
 const villas = ref(fallbackVillas);
 const villaTypes = ref([]);
 const operatingMode = ref('airbnb');
-const services = ref([
-  { id: 'fallback-dining', title: 'Fine dining', description: 'Bali-inspired menus prepared with market-fresh ingredients and served wherever you feel most at home.', imageUrl: 'https://images.unsplash.com/photo-1544148103-0773bf10d330?auto=format&fit=crop&w=900&q=85' },
-  { id: 'fallback-transfer', title: 'Airport transfers', description: 'A smooth private transfer from the airport, ready when you land and tailored to your villa arrival.', imageUrl: 'https://images.unsplash.com/photo-1539650116574-75c0c6d73f6e?auto=format&fit=crop&w=900&q=85' },
-  { id: 'fallback-spa', title: 'Massage and spa', description: 'Slow down with restorative treatments, gentle rituals, and the calm of a Balinese spa at your door.', imageUrl: 'https://images.unsplash.com/photo-1544161515-4ab6ce6db874?auto=format&fit=crop&w=900&q=85' }
-]);
+const services = ref([]);
 const showBooking = ref(false);
 const bookingSaving = ref(false);
 const bookingComplete = ref(false);
@@ -43,8 +31,8 @@ function toCard(villa) {
     name: villa.name,
     location: villa.location,
     detail: `${villa.capacity} guests · ${villa.bedroomCount} bedrooms`,
-    price: `$${villa.nightlyPrice}`,
-    image: villa.photos?.[0]?.url || villa.villaType?.defaultImageUrl || '/icons/Background.jpg',
+    price: formatCurrency(villa.nightlyPrice),
+    image: villa.photos?.[0]?.url || villa.villaType?.defaultImageUrl || '',
     mediaType: villa.photos?.[0]?.mediaType || 'image',
     amenities: villa.amenities || [],
     id: villa.id,
@@ -79,9 +67,9 @@ onMounted(async () => {
 
   try {
     const result = await serviceService.listPublic();
-    if (result.services.length) services.value = result.services;
+    services.value = result.services;
   } catch (_error) {
-    // Keep the curated services available when the API is offline.
+    services.value = [];
   }
 
   const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -125,45 +113,39 @@ async function submitBooking() {
 }
 
 const experiences = [
-  { number: '01', title: 'Morning offerings', text: 'Wake to frangipani, a quiet cup of Bali coffee, and a day with nowhere else to be.' },
-  { number: '02', title: 'The island, gently', text: 'Follow rice-field paths, find a hidden warung, or let the tide decide the afternoon.' },
-  { number: '03', title: 'A stay with soul', text: 'Homes with a sense of place, hosted with the warmth and grace of the island.' }
-];
-
-const baliDestinations = [
-  { name: 'Ubud', note: 'Rice fields & ritual', image: 'https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&w=900&q=85' },
-  { name: 'Canggu', note: 'Salt air & slow mornings', image: 'https://images.unsplash.com/photo-1539367628448-4bc5c9d171c8?auto=format&fit=crop&w=900&q=85' },
-  { name: 'Uluwatu', note: 'Clifftops & golden hour', image: 'https://images.unsplash.com/photo-1539367628448-4bc5c9d171c8?auto=format&fit=crop&w=900&q=85' }
+  { number: '01', title: 'Mornings above the clouds', text: 'Wake to mist in the valley, a quiet cup of Bali coffee, and a day with nowhere else to be.' },
+  { number: '02', title: 'The mountain, slowly', text: 'Follow forest paths, visit a hillside temple, or let the changing light decide the afternoon.' },
+  { number: '03', title: 'A stay with altitude', text: 'Homes with a sense of place, hosted with the warmth and calm of Bali’s highlands.' }
 ];
 
 const baliFacilities = [
-  { icon: '✦', title: 'Island welcome', text: 'A warm arrival, fresh flowers, and thoughtful details from the moment you reach us.' },
-  { icon: '◌', title: 'Private pools', text: 'Your own quiet waterline for slow afternoons beneath the palms.' },
-  { icon: '⌁', title: 'Local table', text: 'Bali-inspired breakfasts and simple, beautiful meals made close to home.' },
-  { icon: '⌂', title: 'Easy transfers', text: 'A considered arrival from the airport, coast, or wherever the island finds you.' }
+  { icon: '✦', title: 'Highland welcome', text: 'A warm arrival, fresh flowers, and thoughtful details from the moment you reach the villa.' },
+  { icon: '◌', title: 'Volcano views', text: 'Wake to layered ridgelines, cool air, and wide-open skies beyond your windows.' },
+  { icon: '⌁', title: 'Local harvest', text: 'Bali-inspired breakfasts built around coffee, herbs, and produce grown nearby.' },
+  { icon: '⌂', title: 'Easy ascents', text: 'A considered arrival from the airport through villages, forests, and mountain passes.' }
 ];
 
 </script>
 
 <template>
   <main class="landing-page">
-    <div class="leaf-animation" aria-hidden="true"><span class="leaf-frond leaf-frond-left"></span><span class="leaf-frond leaf-frond-right"></span><span class="leaf-shadow leaf-shadow-top"></span><span class="floating-leaf floating-leaf-one"></span><span class="floating-leaf floating-leaf-two"></span><span class="floating-leaf floating-leaf-three"></span><span class="floating-leaf floating-leaf-four"></span><span class="palm-shadow palm-shadow-left"></span><span class="palm-shadow palm-shadow-right"></span></div>
+    <div class="leaf-animation" aria-hidden="true"><span class="leaf-frond leaf-frond-left"></span><span class="leaf-frond leaf-frond-right"></span><span class="leaf-shadow leaf-shadow-top"></span><span class="floating-leaf floating-leaf-one"></span><span class="floating-leaf floating-leaf-two"></span><span class="floating-leaf floating-leaf-three"></span><span class="floating-leaf floating-leaf-four"></span></div>
     <section class="hero" aria-labelledby="hero-title">
-      <div class="hero-media" role="img" aria-label="A tropical villa overlooking the sea"></div>
+      <div class="hero-media" role="img" aria-label="A mountain villa above the mist in Bali"></div>
       <div class="hero-shade"></div>
       <div class="mountain-atmosphere" aria-hidden="true"><span class="mist-band mist-band-one"></span><span class="mist-band mist-band-two"></span><span class="cloud-bank cloud-bank-one"></span><span class="cloud-bank cloud-bank-two"></span></div>
       <header class="site-header">
-        <RouterLink class="brand brand-light" to="/" aria-label="Bersantai home"><img class="brand-logo" :src="officialLogo" alt="Bersantai Bali Private Resort"></RouterLink>
+        <RouterLink class="brand brand-light" to="/" aria-label="Bersantai home"><img class="brand-logo" :src="officialLogo" alt="Bersantai Bali Mountain Villas"></RouterLink>
         <nav class="desktop-nav" aria-label="Main navigation"><a href="#home">Home</a><a href="#villas">Villas</a><a href="#how-it-works">How It Works</a><a href="#about">About</a><RouterLink class="host-link" to="/host/login">Host</RouterLink></nav>
         <div class="header-actions"><RouterLink class="mobile-host-link" to="/host/login">Host</RouterLink><RouterLink class="header-cta" to="/register">Request a Stay <span aria-hidden="true">↗</span></RouterLink></div>
       </header>
-      <div class="hero-content" id="home"><p class="eyebrow eyebrow-light">Bali, at your own pace</p><h1 id="hero-title">Find your<br><em>island rhythm.</em></h1><p class="hero-copy">Private villas, rice-field mornings, and the kind of quiet<br class="desktop-break"> that stays with you long after you leave.</p><button class="button button-sun hero-book-button" type="button" @click="openBooking()">Book your stay <span aria-hidden="true">↗</span></button></div>
+      <div class="hero-content" id="home"><p class="eyebrow eyebrow-light">Bali, above the ordinary</p><h1 id="hero-title">Find your<br><em>mountain calm.</em></h1><p class="hero-copy">Private villas, misty mornings, and the kind of quiet<br class="desktop-break"> that stays with you long after you leave.</p><button class="button button-sun hero-book-button" type="button" @click="openBooking()">Book your stay <span aria-hidden="true">↗</span></button></div>
       <a class="scroll-cue" href="#villas"><span>Scroll to explore</span><b aria-hidden="true">↓</b></a>
     </section>
 
-    <section class="villa-section section-pad" id="villas" data-reveal><div class="section-heading"><div><p class="eyebrow">Handpicked in Bali</p><h2>Stays worth<br><em>staying for.</em></h2></div><a class="text-link desktop-only" href="#villas">View all villas <span aria-hidden="true">↗</span></a></div><div class="villa-grid"><VillaCard v-for="villa in villas" :key="villa.name" :villa="villa" @book="openBooking(villa)" /></div></section>
+    <section class="villa-section section-pad" id="villas" data-reveal><div class="section-heading"><div><p class="eyebrow">Mountain villas in Bali</p><h2>Stays worth<br><em>climbing for.</em></h2></div><a class="text-link desktop-only" href="#villas">View all villas <span aria-hidden="true">↗</span></a></div><div class="villa-grid"><VillaCard v-for="villa in villas" :key="villa.name" :villa="villa" @explore="router.push({ name: 'villa-detail', params: { villaId: villa.id } })" @book="openBooking(villa)" /></div></section>
 
-    <section class="services-section section-pad" id="services" data-reveal><div class="section-heading"><div><p class="eyebrow">Made for your stay</p><h2>Island services,<br><em>beautifully handled.</em></h2></div><p class="section-aside">Thoughtful extras, arranged<br>around your rhythm.</p></div><div class="service-grid"><article v-for="service in services" :key="service.id" class="service-card"><img v-if="service.imageUrl" :src="service.imageUrl" :alt="service.title" loading="lazy"><div><h3>{{ service.title }}</h3><p>{{ service.description }}</p><button class="service-book" type="button" @click="openBooking()">Add to your stay <span aria-hidden="true">↗</span></button></div></article></div></section>
+    <section class="services-section section-pad" id="services" data-reveal><div class="section-heading"><div><p class="eyebrow">Made for your stay</p><h2>Mountain services,<br><em>beautifully handled.</em></h2></div><p class="section-aside">Thoughtful extras, arranged<br>around your rhythm.</p></div><div class="service-grid"><article v-for="service in services" :key="service.id" class="service-card"><img v-if="service.imageUrl" :src="resolveMediaUrl(service.imageUrl)" :alt="service.title" loading="lazy"><div><h3>{{ service.title }}</h3><p>{{ service.description }}</p><button class="service-book" type="button" @click="openBooking()">Add to your stay <span aria-hidden="true">↗</span></button></div></article></div></section>
 
     <section class="facilities section-pad" data-reveal><div class="section-heading"><div><p class="eyebrow">Everything in its place</p><h2>Little luxuries,<br><em>naturally.</em></h2></div><p class="section-aside">The details that make<br>a stay feel effortless.</p></div><div class="facility-grid"><article v-for="facility in baliFacilities" :key="facility.title" class="facility-item"><span>{{ facility.icon }}</span><h3>{{ facility.title }}</h3><p>{{ facility.text }}</p></article></div></section>
 
@@ -173,7 +155,7 @@ const baliFacilities = [
 
     <section class="final-cta section-pad"><p class="eyebrow">Your next chapter</p><h2>There is a little<br><em>more out there.</em></h2><p>Let the days unfold somewhere beautiful.</p><RouterLink class="button button-dark" to="/register">Find your villa <span aria-hidden="true">↗</span></RouterLink></section>
 
-    <footer class="site-footer"><div class="footer-main"><div class="footer-intro"><RouterLink class="footer-logo" to="/"><img :src="officialLogo" alt="Bersantai Bali Private Resort"></RouterLink><p>Bersantai is a collection of private Bali stays, made for slower days, warm welcomes, and a closer connection to the island.</p></div><div class="footer-contact"><h3>Find us</h3><p>Ubud, Canggu & Uluwatu<br>Bali, Indonesia</p><a href="mailto:hello@bersantai.com">hello@bersantai.com</a><a href="tel:+62361234567">+62 361 234 567</a></div><div class="footer-navigation"><h3>Navigate</h3><div><a href="#home">Home</a><a href="#villas">Villas</a><a href="#how-it-works">Experiences</a><a href="#about">About</a></div><div><a href="#villas">Book a stay</a><a href="/host/login">Host portal</a><a href="mailto:hello@bersantai.com">Contact</a></div></div></div><div class="footer-bottom"><div class="footer-social"><a href="#home" aria-label="Instagram">◎</a><a href="#home" aria-label="Facebook">f</a><a href="#home" aria-label="Pinterest">p</a></div><p class="copyright">© 2026 Bersantai · Stay. Breathe. Belong.</p><a class="back-to-top" href="#home" aria-label="Back to top">↑</a></div></footer>
+    <footer class="site-footer"><div class="footer-main"><div class="footer-intro"><RouterLink class="footer-logo" to="/"><img :src="officialLogo" alt="Bersantai Bali Mountain Villas"></RouterLink><p>Bersantai is a collection of private Bali mountain stays, made for slower days, warm welcomes, and a closer connection to the highlands.</p></div><div class="footer-contact"><h3>Find us</h3><p>Kintamani, Munduk & Bedugul<br>Bali, Indonesia</p><a href="mailto:hello@bersantai.com">hello@bersantai.com</a><a href="tel:+62361234567">+62 361 234 567</a></div><div class="footer-navigation"><h3>Navigate</h3><div><a href="#home">Home</a><a href="#villas">Villas</a><a href="#how-it-works">Experiences</a><a href="#about">About</a></div><div><a href="#villas">Book a stay</a><a href="/host/login">Host portal</a><a href="mailto:hello@bersantai.com">Contact</a></div></div></div><div class="footer-bottom"><div class="footer-social"><a href="#home" aria-label="Instagram">◎</a><a href="#home" aria-label="Facebook">f</a><a href="#home" aria-label="Pinterest">p</a></div><p class="copyright">© 2026 Bersantai · Stay. Breathe. Belong.</p><a class="back-to-top" href="#home" aria-label="Back to top">↑</a></div></footer>
     <div v-if="showBooking" class="booking-backdrop" @click.self="showBooking = false"><section class="booking-modal" aria-labelledby="booking-title"><button class="booking-close" type="button" aria-label="Close booking" @click="showBooking = false">×</button><template v-if="bookingComplete"><span class="booking-success-icon">✓</span><p class="eyebrow">Request received</p><h2 id="booking-title">Your Bali stay is<br><em>on its way.</em></h2><p class="booking-message">We have sent your request for {{ selectedBookingVilla?.name }} to our stay team. We will be in touch shortly to confirm the details.</p><button class="button button-dark" type="button" @click="showBooking = false">Done</button></template><template v-else><p class="eyebrow">Begin your stay</p><h2 id="booking-title">Book your<br><em>somewhere.</em></h2><form class="booking-form" @submit.prevent="submitBooking"><label>Villa<select v-model="bookingForm.villaId" required><option v-for="villa in villas" :key="villa.id || villa.name" :value="villa.id">{{ villa.name }} · {{ villa.location }}</option></select></label><div class="booking-columns"><label>Check-in<input v-model="bookingForm.checkIn" type="date" :min="today" required></label><label>Check-out<input v-model="bookingForm.checkOut" type="date" :min="bookingForm.checkIn || today" required></label></div><label>Guests<input v-model="bookingForm.guests" type="number" min="1" :max="selectedBookingVilla?.capacity || 10" required></label><label>Your name<input v-model="bookingForm.guestName" autocomplete="name" required></label><label>Email address<input v-model="bookingForm.guestEmail" type="email" autocomplete="email" required></label><p v-if="bookingError" class="booking-error" role="alert">{{ bookingError }}</p><button class="button button-dark booking-submit" type="submit" :disabled="bookingSaving">{{ bookingSaving ? 'Sending request...' : 'Request to book' }} <span aria-hidden="true">↗</span></button><small class="booking-note">No payment today. Your reservation is confirmed after our team reviews your request.</small></form></template></section></div>
   </main>
 </template>

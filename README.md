@@ -84,6 +84,8 @@ Frontend configuration lives in `frontend/.env` and must only contain public `VI
 
 ```text
 VITE_API_BASE_URL=http://localhost:3000/api/v1
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
 ```
 
 Backend secrets live in `backend/.env`:
@@ -100,6 +102,8 @@ DB_PASSWORD=bersantai_dev_password
 JWT_SECRET=replace-with-a-long-random-secret
 JWT_EXPIRES_IN=7d
 AUTH_COOKIE_NAME=bersantai_session
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-supabase-anon-key
 ```
 
 Never expose database credentials or JWT secrets to the Vue app.
@@ -109,6 +113,15 @@ For authentication to work locally, `JWT_SECRET` must be set and MySQL must be r
 ```bash
 npm run migrate
 ```
+
+Enable Google and Facebook providers in Supabase Authentication, and add these callback URLs in the Supabase URL configuration:
+
+```text
+http://localhost:5173/auth/callback
+https://your-production-domain.example/auth/callback
+```
+
+Use the same production frontend origin in `FRONTEND_ORIGIN`. Supabase redirects back to the callback route, which exchanges the verified Supabase session for the Bersantai HttpOnly session cookie.
 
 ## Documentation
 

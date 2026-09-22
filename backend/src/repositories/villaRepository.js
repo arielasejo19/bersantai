@@ -56,6 +56,7 @@ export async function listPublicVillas() {
   const rows = await baseQuery(db)
     .where('villas.status', 'active')
     .where('villas.availability_status', 'available')
+    .where((builder) => builder.whereNull('villa_types.id').orWhere('villa_types.is_active', true).andWhere('villa_types.status', 'active').andWhere('villa_types.availability_status', 'available'))
     .orderBy('villas.created_at', 'desc');
 
   return Promise.all(rows.map(async (row) => {
@@ -64,15 +65,24 @@ export async function listPublicVillas() {
   }));
 }
 
+export async function findPublicVilla(villaId) {
+  const db = database();
+  const row = await baseQuery(db).where('villas.id', villaId).where('villas.status', 'active').where('villas.availability_status', 'available').where((builder) => builder.whereNull('villa_types.id').orWhere('villa_types.is_active', true).andWhere('villa_types.status', 'active').andWhere('villa_types.availability_status', 'available')).first();
+  if (!row) throw new ApiError(404, 'Villa not found');
+  const items = await related(db, row.id);
+  return toVilla(row, items.amenities, items.photos);
+}
+
 export async function checkPublicAvailability(input) {
   const db = database();
-  const query = db('reservations').whereIn('booking_status', ['pending', 'confirmed', 'checked_in']).where('check_in', '<', input.checkOut).where('check_out', '>', input.checkIn);
-  if (input.bookingKind === 'day_tour') return { available: true };
+  const checkOut = input.checkOut || input.checkIn;
+  const query = db('reservations').whereIn('booking_status', ['pending', 'confirmed', 'checked_in']).where('check_in', '<=', checkOut).where('check_out', '>=', input.checkIn);
   if (input.villaTypeId) {
-    const [{ count: rooms }] = await db('villas').where({ villa_type_id: input.villaTypeId, status: 'active', availability_status: 'available' }).count({ count: '*' });
+    const [{ count: rooms }] = await db('villas').join('villa_types', 'villa_types.id', 'villas.villa_type_id').where({ 'villas.villa_type_id': input.villaTypeId, 'villas.status': 'active', 'villas.availability_status': 'available', 'villa_types.is_active': true, 'villa_types.status': 'active', 'villa_types.availability_status': 'available' }).count({ count: '*' });
     const [{ count: bookings }] = await query.where({ villa_type_id: input.villaTypeId }).count({ count: '*' });
     return { available: Number(bookings) < Number(rooms) };
   }
+  if (input.bookingKind === 'day_tour') return { available: true };
   return { available: !(await query.where({ villa_id: input.villaId }).first()) };
 }
 
@@ -135,7 +145,7 @@ export async function addAmenity(villaId, name) {
 
 export async function addPhoto(villaId, input) {
   const db = database();
-  await db('villa_photos').insert({ villa_id: villaId, url: input.url, alt_text: input.altText, sort_order: input.sortOrder });
+  await db('villa_photos').insert({ villa_id: villaId, url: input.url, media_type: input.mediaType || 'image', alt_text: input.altText, is_thumbnail: Boolean(input.isThumbnail), sort_order: input.sortOrder });
 }
 
 export async function assignReceptionist(villaId, userId) {
@@ -181,8 +191,9 @@ export async function updateReservation(reservationId, input, user) {
 export async function createPublicReservation(input) {
   const db = database();
   return db.transaction(async (trx) => {
-    const villa = input.operatingMode === 'hotel'
-      ? await trx('villas').where({ villa_type_id: input.villaTypeId, status: 'active', availability_status: 'available' }).orderBy('id').first()
+    const typeBooking = Boolean(input.villaTypeId);
+    const villa = typeBooking
+      ? await trx('villas').join('villa_types', 'villa_types.id', 'villas.villa_type_id').where({ 'villas.villa_type_id': input.villaTypeId, 'villas.status': 'active', 'villas.availability_status': 'available', 'villa_types.is_active': true, 'villa_types.status': 'active', 'villa_types.availability_status': 'available' }).select('villas.*').orderBy('villas.id').first()
       : await trx('villas').where({ id: input.villaId, status: 'active', availability_status: 'available' }).first();
     if (!villa) throw new ApiError(404, 'This villa selection is not available for booking');
     if (input.bookingKind === 'overnight' && villa.villa_type_id) {
@@ -191,21 +202,22 @@ export async function createPublicReservation(input) {
     }
     if (input.guests > villa.capacity) throw new ApiError(400, `This villa accommodates up to ${villa.capacity} guests`);
     const conflictQuery = trx('reservations').whereIn('booking_status', ['pending', 'confirmed', 'checked_in']).where('check_in', '<', input.checkOut).where('check_out', '>', input.checkIn);
-    if (input.operatingMode === 'hotel') {
-      const [{ count: availableRooms }] = await trx('villas').where({ villa_type_id: input.villaTypeId, status: 'active', availability_status: 'available' }).count({ count: '*' });
+    if (typeBooking) {
+      const [{ count: availableRooms }] = await trx('villas').join('villa_types', 'villa_types.id', 'villas.villa_type_id').where({ 'villas.villa_type_id': input.villaTypeId, 'villas.status': 'active', 'villas.availability_status': 'available', 'villa_types.is_active': true, 'villa_types.status': 'active', 'villa_types.availability_status': 'available' }).count({ count: '*' });
       const [{ count: bookedRooms }] = await conflictQuery.where({ villa_type_id: input.villaTypeId }).count({ count: '*' });
       if (Number(bookedRooms) >= Number(availableRooms)) throw new ApiError(409, 'Those dates are no longer available');
     } else if (await conflictQuery.where({ villa_id: input.villaId }).first()) {
       throw new ApiError(409, 'Those dates are no longer available');
     }
     const referenceNumber = `BRS-${Date.now().toString(36).toUpperCase()}`;
-    const [id] = await trx('reservations').insert({ villa_id: input.operatingMode === 'hotel' ? null : input.villaId, villa_type_id: input.operatingMode === 'hotel' ? input.villaTypeId : null, booking_kind: input.bookingKind, payment_method: input.paymentMethod, payment_status: input.paymentMethod === 'cash' ? 'pending' : 'paid', total_amount: input.totalAmount, reference_number: referenceNumber, guest_user_id: input.guestUserId || null, guest_name: input.guestName, guest_email: input.guestEmail, check_in: input.checkIn, check_out: input.bookingKind === 'day_tour' ? input.checkIn : input.checkOut, status: 'pending', booking_status: 'pending' });
+    const assignedVillaId = typeBooking && input.operatingMode !== 'hotel' ? villa.id : input.operatingMode === 'hotel' ? null : input.villaId;
+    const [id] = await trx('reservations').insert({ villa_id: assignedVillaId, villa_type_id: typeBooking ? input.villaTypeId : null, booking_kind: input.bookingKind, payment_method: input.paymentMethod, payment_status: input.paymentMethod === 'cash' ? 'pending' : 'paid', total_amount: input.totalAmount, reference_number: referenceNumber, guest_user_id: input.guestUserId || null, guest_name: input.guestName, guest_email: input.guestEmail, check_in: input.checkIn, check_out: input.bookingKind === 'day_tour' ? input.checkIn : input.checkOut, status: 'pending', booking_status: 'pending' });
     if (input.serviceIds?.length) {
       const selectedServices = await trx('services').whereIn('id', input.serviceIds).where('is_active', true);
       await trx('reservation_services').insert(selectedServices.map((service) => ({ reservation_id: id, service_id: service.id, unit_price: service.price, quantity: 1 })));
     }
     await trx('reservation_emails').insert({ reservation_id: id, recipient: input.guestEmail, template: 'reservation-received', status: 'sent' });
-    return { id: String(id), referenceNumber, villaId: input.operatingMode === 'hotel' ? null : String(input.villaId), villaTypeId: input.operatingMode === 'hotel' ? String(input.villaTypeId) : null, guestName: input.guestName, guestEmail: input.guestEmail, checkIn: input.checkIn, checkOut: input.checkOut, bookingStatus: 'pending', paymentStatus: input.paymentMethod === 'cash' ? 'pending' : 'paid', totalAmount: input.totalAmount };
+    return { id: String(id), referenceNumber, villaId: assignedVillaId ? String(assignedVillaId) : null, villaTypeId: typeBooking ? String(input.villaTypeId) : null, guestName: input.guestName, guestEmail: input.guestEmail, checkIn: input.checkIn, checkOut: input.checkOut, bookingStatus: 'pending', paymentStatus: input.paymentMethod === 'cash' ? 'pending' : 'paid', totalAmount: input.totalAmount };
   });
 }
 

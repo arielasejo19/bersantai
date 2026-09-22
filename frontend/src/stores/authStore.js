@@ -70,12 +70,46 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
+    async startSocialLogin(provider, redirectTo) {
+      this.loading = true;
+      this.error = null;
+
+      try {
+        await authService.startSocialOAuth(provider, redirectTo);
+      } catch (error) {
+        this.error = messageFromError(error, 'Social login failed');
+        throw error;
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    async completeSocialLogin(accessToken) {
+      this.loading = true;
+      this.error = null;
+
+      try {
+        const result = await authService.exchangeSocialToken(accessToken);
+        this.user = result.user;
+        this.initialized = true;
+        return result.user;
+      } catch (error) {
+        this.error = messageFromError(error, 'Social login could not be completed');
+        throw error;
+      } finally {
+        this.loading = false;
+      }
+    },
+
     async logout() {
       this.loading = true;
       this.error = null;
 
       try {
         await authService.logout();
+        if (authService.socialLogout) {
+          try { await authService.socialLogout(); } catch { }
+        }
       } finally {
         this.user = null;
         this.profile = null;

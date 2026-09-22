@@ -25,9 +25,10 @@ describe('HomeView', () => {
     });
 
     expect(wrapper.text()).toContain('Find your');
-    expect(wrapper.text()).toContain('island rhythm');
+    expect(wrapper.text()).toContain('mountain calm');
     expect(wrapper.text()).toContain('Stays worth');
-    expect(wrapper.text()).toContain('Island services');
+    expect(wrapper.text()).toContain('Mountain services');
+    expect(wrapper.text()).not.toContain('island rhythm');
     expect(wrapper.text()).not.toContain('Beyond the villa');
     expect(wrapper.text()).not.toContain('Moments of');
     expect(wrapper.findAll('.villa-card')).toHaveLength(3);
