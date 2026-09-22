@@ -40,6 +40,7 @@ export async function findUserWithProfileById(id, trx = requireDatabase()) {
       'users.email',
       'users.role',
       'users.account_status',
+      'users.email_verified',
       'users.created_at',
       'users.updated_at',
       'users.last_login_at',
@@ -67,7 +68,8 @@ export async function createUserWithProfile({ email, passwordHash, displayName }
       email,
       password_hash: passwordHash,
       role: 'guest',
-      account_status: 'active'
+      account_status: 'active',
+      email_verified: true
     });
 
     await trx('profiles').insert({
@@ -93,7 +95,8 @@ export async function createManagedUser({ email, passwordHash, displayName, role
       email,
       password_hash: passwordHash,
       role,
-      account_status: 'active'
+      account_status: 'active',
+      email_verified: true
     });
 
     await trx('profiles').insert({
@@ -136,6 +139,7 @@ export async function listAccounts({ role } = {}) {
     email: row.email,
     role: row.role,
     accountStatus: row.account_status,
+    emailVerified: Boolean(row.email_verified),
     displayName: row.display_name,
     createdAt: row.created_at,
     lastLoginAt: row.last_login_at

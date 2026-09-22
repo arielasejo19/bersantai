@@ -15,5 +15,17 @@ export const authService = {
 
   logout() {
     return apiClient.post('/auth/logout');
+  },
+
+  sendBookingVerification(email) {
+    return apiClient.post('/booking-verification/send', { email });
+  },
+
+  verifyBookingEmail(payload) {
+    return apiClient.post('/booking-verification/verify', payload);
+  },
+
+  social(payload) {
+    return apiClient.post('/auth/social', payload);
   }
 };

@@ -18,6 +18,7 @@ function accessQuery(query, user) {
 function toVilla(row, amenities = [], photos = []) {
   return {
     id: String(row.id), name: row.name, slug: row.slug, location: row.location,
+    villaType: row.villa_type_id ? { id: String(row.villa_type_id), name: row.villa_type_name, slug: row.villa_type_slug, dayTourOnly: Boolean(row.villa_type_day_tour_only), defaultImageUrl: row.villa_type_default_image } : null,
     description: row.description, nightlyPrice: Number(row.nightly_price), capacity: row.capacity,
     bedroomCount: row.bedroom_count, status: row.status, availabilityStatus: row.availability_status,
     owner: row.owner_user_id ? { id: String(row.owner_user_id), email: row.owner_email, displayName: row.owner_name } : null,
@@ -35,9 +36,10 @@ async function related(db, villaId) {
 
 function baseQuery(db) {
   return db('villas')
+    .leftJoin('villa_types', 'villa_types.id', 'villas.villa_type_id')
     .leftJoin('users as owners', 'owners.id', 'villas.owner_user_id')
     .leftJoin('profiles as owner_profiles', 'owner_profiles.user_id', 'villas.owner_user_id')
-    .select('villas.*', 'owners.email as owner_email', 'owner_profiles.display_name as owner_name');
+    .select('villas.*', 'villa_types.name as villa_type_name', 'villa_types.slug as villa_type_slug', 'villa_types.day_tour_only as villa_type_day_tour_only', 'villa_types.default_image_url as villa_type_default_image', 'owners.email as owner_email', 'owner_profiles.display_name as owner_name');
 }
 
 export async function listVillasForUser(user) {
@@ -62,6 +64,18 @@ export async function listPublicVillas() {
   }));
 }
 
+export async function checkPublicAvailability(input) {
+  const db = database();
+  const query = db('reservations').whereIn('booking_status', ['pending', 'confirmed', 'checked_in']).where('check_in', '<', input.checkOut).where('check_out', '>', input.checkIn);
+  if (input.bookingKind === 'day_tour') return { available: true };
+  if (input.villaTypeId) {
+    const [{ count: rooms }] = await db('villas').where({ villa_type_id: input.villaTypeId, status: 'active', availability_status: 'available' }).count({ count: '*' });
+    const [{ count: bookings }] = await query.where({ villa_type_id: input.villaTypeId }).count({ count: '*' });
+    return { available: Number(bookings) < Number(rooms) };
+  }
+  return { available: !(await query.where({ villa_id: input.villaId }).first()) };
+}
+
 export async function findVillaForUser(villaId, user) {
   const db = database();
   const row = await accessQuery(baseQuery(db).where('villas.id', villaId), user).first();
@@ -76,7 +90,7 @@ export async function createVilla(input) {
     const [id] = await trx('villas').insert({
       name: input.name, slug: input.slug, location: input.location, description: input.description,
       nightly_price: input.nightlyPrice, capacity: input.capacity, bedroom_count: input.bedroomCount,
-      status: input.status, availability_status: input.availabilityStatus, owner_user_id: input.ownerUserId
+      status: input.status, availability_status: input.availabilityStatus, owner_user_id: input.ownerUserId, villa_type_id: input.villaTypeId || null
     });
 
     if (input.amenities?.length) {
@@ -98,7 +112,7 @@ export async function updateVilla(villaId, input) {
     await trx('villas').where({ id: villaId }).update({
       name: input.name, slug: input.slug, location: input.location, description: input.description,
       nightly_price: input.nightlyPrice, capacity: input.capacity, bedroom_count: input.bedroomCount,
-      status: input.status, availability_status: input.availabilityStatus, owner_user_id: input.ownerUserId
+      status: input.status, availability_status: input.availabilityStatus, owner_user_id: input.ownerUserId, villa_type_id: input.villaTypeId || null
     });
     if (input.amenities) {
       await trx('villa_amenities').where({ villa_id: villaId }).del();
@@ -138,6 +152,18 @@ export async function listReservationsForUser(villaId, user) {
   return rows.map((row) => ({ ...row, id: String(row.id), villaId: String(row.villa_id), guestUserId: row.guest_user_id ? String(row.guest_user_id) : null }));
 }
 
+export async function listReservationsForRole(user) {
+  const db = database();
+  let query = db('reservations')
+    .leftJoin('villas', 'villas.id', 'reservations.villa_id')
+    .leftJoin('villa_types', 'villa_types.id', 'reservations.villa_type_id')
+    .select('reservations.*', 'villas.name as villa_name', 'villa_types.name as villa_type_name')
+    .orderBy('reservations.check_in');
+  if (user.role === 'host') query = query.where('villas.owner_user_id', user.id);
+  if (user.role === 'receptionist') query = query.where((builder) => builder.whereNotNull('reservations.villa_id').orWhereExists(db.select('*').from('villa_receptionist_assignments as assignments').whereRaw('assignments.villa_id = reservations.villa_id').andWhere('assignments.user_id', user.id)));
+  return query;
+}
+
 export async function updateReservation(reservationId, input, user) {
   const db = database();
   const accessibleReservation = await accessQuery(
@@ -146,17 +172,50 @@ export async function updateReservation(reservationId, input, user) {
   ).first();
   if (!accessibleReservation) throw new ApiError(404, 'Reservation not found');
   await db('reservations').where({ id: reservationId }).update(input);
+  if (input.booking_status === 'confirmed') {
+    const reservation = await db('reservations').where({ id: reservationId }).first();
+    await db('reservation_emails').insert({ reservation_id: reservationId, recipient: reservation.guest_email, template: 'reservation-confirmed', status: 'sent' });
+  }
 }
 
 export async function createPublicReservation(input) {
   const db = database();
   return db.transaction(async (trx) => {
-    const villa = await trx('villas').where({ id: input.villaId, status: 'active', availability_status: 'available' }).first();
-    if (!villa) throw new ApiError(404, 'This villa is not available for booking');
+    const villa = input.operatingMode === 'hotel'
+      ? await trx('villas').where({ villa_type_id: input.villaTypeId, status: 'active', availability_status: 'available' }).orderBy('id').first()
+      : await trx('villas').where({ id: input.villaId, status: 'active', availability_status: 'available' }).first();
+    if (!villa) throw new ApiError(404, 'This villa selection is not available for booking');
+    if (input.bookingKind === 'overnight' && villa.villa_type_id) {
+      const type = await trx('villa_types').where({ id: villa.villa_type_id }).first();
+      if (type?.day_tour_only) throw new ApiError(400, 'This Villa Type is available for Day Tours only');
+    }
     if (input.guests > villa.capacity) throw new ApiError(400, `This villa accommodates up to ${villa.capacity} guests`);
-    const conflict = await trx('reservations').where({ villa_id: input.villaId }).whereIn('booking_status', ['pending', 'confirmed', 'checked_in']).where('check_in', '<', input.checkOut).where('check_out', '>', input.checkIn).first();
-    if (conflict) throw new ApiError(409, 'Those dates are no longer available');
-    const [id] = await trx('reservations').insert({ villa_id: input.villaId, guest_user_id: input.guestUserId || null, guest_name: input.guestName, guest_email: input.guestEmail, check_in: input.checkIn, check_out: input.checkOut, status: 'pending', booking_status: 'pending' });
-    return { id: String(id), villaId: String(input.villaId), guestName: input.guestName, checkIn: input.checkIn, checkOut: input.checkOut, bookingStatus: 'pending' };
+    const conflictQuery = trx('reservations').whereIn('booking_status', ['pending', 'confirmed', 'checked_in']).where('check_in', '<', input.checkOut).where('check_out', '>', input.checkIn);
+    if (input.operatingMode === 'hotel') {
+      const [{ count: availableRooms }] = await trx('villas').where({ villa_type_id: input.villaTypeId, status: 'active', availability_status: 'available' }).count({ count: '*' });
+      const [{ count: bookedRooms }] = await conflictQuery.where({ villa_type_id: input.villaTypeId }).count({ count: '*' });
+      if (Number(bookedRooms) >= Number(availableRooms)) throw new ApiError(409, 'Those dates are no longer available');
+    } else if (await conflictQuery.where({ villa_id: input.villaId }).first()) {
+      throw new ApiError(409, 'Those dates are no longer available');
+    }
+    const referenceNumber = `BRS-${Date.now().toString(36).toUpperCase()}`;
+    const [id] = await trx('reservations').insert({ villa_id: input.operatingMode === 'hotel' ? null : input.villaId, villa_type_id: input.operatingMode === 'hotel' ? input.villaTypeId : null, booking_kind: input.bookingKind, payment_method: input.paymentMethod, payment_status: input.paymentMethod === 'cash' ? 'pending' : 'paid', total_amount: input.totalAmount, reference_number: referenceNumber, guest_user_id: input.guestUserId || null, guest_name: input.guestName, guest_email: input.guestEmail, check_in: input.checkIn, check_out: input.bookingKind === 'day_tour' ? input.checkIn : input.checkOut, status: 'pending', booking_status: 'pending' });
+    if (input.serviceIds?.length) {
+      const selectedServices = await trx('services').whereIn('id', input.serviceIds).where('is_active', true);
+      await trx('reservation_services').insert(selectedServices.map((service) => ({ reservation_id: id, service_id: service.id, unit_price: service.price, quantity: 1 })));
+    }
+    await trx('reservation_emails').insert({ reservation_id: id, recipient: input.guestEmail, template: 'reservation-received', status: 'sent' });
+    return { id: String(id), referenceNumber, villaId: input.operatingMode === 'hotel' ? null : String(input.villaId), villaTypeId: input.operatingMode === 'hotel' ? String(input.villaTypeId) : null, guestName: input.guestName, guestEmail: input.guestEmail, checkIn: input.checkIn, checkOut: input.checkOut, bookingStatus: 'pending', paymentStatus: input.paymentMethod === 'cash' ? 'pending' : 'paid', totalAmount: input.totalAmount };
   });
+}
+
+export async function assignReservationVilla(reservationId, villaId) {
+  const db = database();
+  const reservation = await db('reservations').where({ id: reservationId }).first();
+  const villa = await db('villas').where({ id: villaId, status: 'active' }).first();
+  if (!reservation || !villa) throw new ApiError(404, 'Reservation or villa not found');
+  if (reservation.villa_type_id && String(reservation.villa_type_id) !== String(villa.villa_type_id)) {
+    throw new ApiError(400, 'The assigned villa must belong to the booked Villa Type');
+  }
+  await db('reservations').where({ id: reservationId }).update({ villa_id: villaId });
 }

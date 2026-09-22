@@ -16,6 +16,7 @@ export const env = {
   jwtSecret: process.env.JWT_SECRET,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
   authCookieName: process.env.AUTH_COOKIE_NAME || 'bersantai_session'
+  ,socialAuthDevMode: process.env.SOCIAL_AUTH_DEV_MODE === 'true'
 };
 
 export function hasDatabaseConfig() {

@@ -3,6 +3,7 @@ import { reactive } from 'vue';
 import { useRoute, useRouter, RouterLink } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { useAuthStore } from '@/stores/authStore';
+import { authService } from '@/services/authService';
 
 const router = useRouter();
 const route = useRoute();
@@ -14,6 +15,14 @@ const form = reactive({
   email: '',
   password: ''
 });
+
+async function socialLogin(provider) {
+  const email = form.email || window.prompt(`Development ${provider} email`);
+  if (!email) return;
+  const loggedInUser = await authService.social({ provider, providerUserId: `${provider}-${email}`, email, displayName: email.split('@')[0] });
+  authStore.user = loggedInUser.user;
+  await router.push('/profile');
+}
 
 async function submit() {
   const loggedInUser = await authStore.login(form);
@@ -51,6 +60,8 @@ async function submit() {
           {{ loading ? 'Logging in...' : 'Log in' }}
         </button>
       </form>
+
+      <div class="social-login"><span>Or continue with</span><div><button class="secondary-button" type="button" @click="socialLogin('google')">Continue with Google</button><button class="secondary-button" type="button" @click="socialLogin('facebook')">Continue with Facebook</button></div></div>
 
       <p class="form-footer">
         New to Bersantai?

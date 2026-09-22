@@ -50,3 +50,16 @@ export function requireRole(...allowedRoles) {
     next();
   };
 }
+
+export async function optionalAuth(request, _response, next) {
+  try {
+    const token = extractToken(request);
+    if (token) {
+      const payload = jwt.verify(token, env.jwtSecret);
+      request.user = await findUserWithProfileById(payload.sub);
+    }
+  } catch (_error) {
+    request.user = null;
+  }
+  next();
+}

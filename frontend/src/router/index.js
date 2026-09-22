@@ -33,6 +33,11 @@ const router = createRouter({
       meta: { guestOnly: true }
     },
     {
+      path: '/booking',
+      name: 'booking',
+      component: () => import('@/views/BookingView.vue')
+    },
+    {
       path: '/profile',
       name: 'profile',
       component: ProfileView,
