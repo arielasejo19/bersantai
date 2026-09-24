@@ -13,7 +13,7 @@ function destination(user) {
   const role = String(user?.role || '').trim().toLowerCase();
   return ['admin', 'host', 'receptionist'].includes(role)
     ? '/management'
-    : route.query.redirect?.toString() || '/profile';
+    : '/';
 }
 
 onMounted(async () => {

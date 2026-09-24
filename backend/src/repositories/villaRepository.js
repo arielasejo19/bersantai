@@ -1,5 +1,6 @@
 import { getDatabase } from '../config/database.js';
 import { ApiError } from '../utils/apiError.js';
+import { calculateVillaStayTotal } from './pricingRepository.js';
 
 function database() {
   const db = getDatabase();
@@ -20,7 +21,7 @@ function toVilla(row, amenities = [], photos = []) {
     id: String(row.id), name: row.name, slug: row.slug, location: row.location,
     villaType: row.villa_type_id ? { id: String(row.villa_type_id), name: row.villa_type_name, slug: row.villa_type_slug, dayTourOnly: Boolean(row.villa_type_day_tour_only), defaultImageUrl: row.villa_type_default_image } : null,
     description: row.description, nightlyPrice: Number(row.nightly_price), capacity: row.capacity,
-    bedroomCount: row.bedroom_count, status: row.status, availabilityStatus: row.availability_status,
+    bedroomCount: row.bedroom_count, status: row.status, availabilityStatus: row.availability_status, stayType: row.stay_type || 'both', mapX: row.map_x === null || row.map_x === undefined ? null : Number(row.map_x), mapY: row.map_y === null || row.map_y === undefined ? null : Number(row.map_y), standardCheckIn: row.standard_check_in || '15:00', standardCheckOut: row.standard_check_out || '11:00',
     owner: row.owner_user_id ? { id: String(row.owner_user_id), email: row.owner_email, displayName: row.owner_name } : null,
     amenities, photos, createdAt: row.created_at, updatedAt: row.updated_at
   };
@@ -32,6 +33,11 @@ async function related(db, villaId) {
     db('villa_photos').where({ villa_id: villaId }).orderBy([{ column: 'is_thumbnail', order: 'desc' }, { column: 'sort_order', order: 'asc' }]).select('id', 'url', 'media_type as mediaType', 'alt_text as altText', 'is_thumbnail as isThumbnail', 'sort_order as sortOrder')
   ]);
   return { amenities: amenities.map((item) => ({ ...item, id: String(item.id) })), photos: photos.map((item) => ({ ...item, id: String(item.id) })) };
+}
+
+async function publicPricingRules(db, villaId, villaTypeId) {
+  const rules = await db('villa_pricing_rules').where({ is_active: true }).where((query) => query.where({ villa_id: villaId }).orWhere({ villa_type_id: villaTypeId || 0 })).orderBy('rule_type').select('id', 'name', 'stay_type', 'rule_type', 'starts_on', 'ends_on', 'price');
+  return rules.map((rule) => ({ id: String(rule.id), name: rule.name, stayType: rule.stay_type || 'both', ruleType: rule.rule_type, startsOn: rule.starts_on, endsOn: rule.ends_on, price: Number(rule.price || 0) }));
 }
 
 function baseQuery(db) {
@@ -47,8 +53,13 @@ export async function listVillasForUser(user) {
   const rows = await accessQuery(baseQuery(db), user).distinct('villas.id').orderBy('villas.created_at', 'desc');
   return Promise.all(rows.map(async (row) => {
     const items = await related(db, row.id);
-    return toVilla(row, items.amenities, items.photos);
+    const pricingRules = await publicPricingRules(db, row.id, row.villa_type_id);
+    return { ...toVilla(row, items.amenities, items.photos), pricingRules };
   }));
+}
+
+export async function listCalendarVillas(user) {
+  return listVillasForUser(user.role === 'receptionist' ? { ...user, role: 'admin' } : user);
 }
 
 export async function listPublicVillas() {
@@ -61,7 +72,8 @@ export async function listPublicVillas() {
 
   return Promise.all(rows.map(async (row) => {
     const items = await related(db, row.id);
-    return toVilla(row, items.amenities, items.photos);
+    const pricingRules = await publicPricingRules(db, row.id, row.villa_type_id);
+    return { ...toVilla(row, items.amenities, items.photos), pricingRules };
   }));
 }
 
@@ -70,7 +82,25 @@ export async function findPublicVilla(villaId) {
   const row = await baseQuery(db).where('villas.id', villaId).where('villas.status', 'active').where('villas.availability_status', 'available').where((builder) => builder.whereNull('villa_types.id').orWhere('villa_types.is_active', true).andWhere('villa_types.status', 'active').andWhere('villa_types.availability_status', 'available')).first();
   if (!row) throw new ApiError(404, 'Villa not found');
   const items = await related(db, row.id);
-  return toVilla(row, items.amenities, items.photos);
+  const pricingRules = await publicPricingRules(db, row.id, row.villa_type_id);
+  return { ...toVilla(row, items.amenities, items.photos), pricingRules };
+}
+
+export async function listGuestReservations(user) {
+  const db = database();
+  const rows = await db('reservations')
+    .leftJoin('villas', 'villas.id', 'reservations.villa_id')
+    .leftJoin('villa_types', 'villa_types.id', 'reservations.villa_type_id')
+    .where((query) => query.where('reservations.guest_user_id', user.id).orWhere('reservations.guest_email', user.email))
+    .select('reservations.*', 'villas.name as villa_name', 'villa_types.name as villa_type_name')
+    .orderBy('reservations.check_in', 'desc');
+  return rows.map((row) => ({
+    id: String(row.id), referenceNumber: row.reference_number, villaId: row.villa_id ? String(row.villa_id) : null,
+    villaName: row.villa_name || row.villa_type_name || 'Bersantai stay', bookingKind: row.booking_kind,
+    guestName: row.guest_name, guestEmail: row.guest_email, checkIn: row.check_in, checkOut: row.check_out,
+    bookingStatus: row.booking_status, paymentStatus: row.payment_status, paymentMethod: row.payment_method,
+    totalAmount: Number(row.total_amount || 0), guestNote: row.guest_note || ''
+  }));
 }
 
 export async function checkPublicAvailability(input) {
@@ -84,6 +114,34 @@ export async function checkPublicAvailability(input) {
   }
   if (input.bookingKind === 'day_tour') return { available: true };
   return { available: !(await query.where({ villa_id: input.villaId }).first()) };
+}
+
+export async function checkPublicAvailabilityCalendar(input) {
+  const db = database();
+  const start = new Date(`${input.startDate}T00:00:00Z`);
+  const end = new Date(`${input.endDate}T00:00:00Z`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) return { unavailableDates: [] };
+  const typeBooking = Boolean(input.villaTypeId);
+  let capacity = 1;
+  if (typeBooking) {
+    const [{ count }] = await db('villas').join('villa_types', 'villa_types.id', 'villas.villa_type_id').where({ 'villas.villa_type_id': input.villaTypeId, 'villas.status': 'active', 'villas.availability_status': 'available', 'villa_types.is_active': true, 'villa_types.status': 'active', 'villa_types.availability_status': 'available' }).count({ count: '*' });
+    capacity = Number(count);
+  }
+  const reservations = await db('reservations').whereIn('booking_status', ['pending', 'confirmed', 'checked_in']).modify((query) => {
+    if (typeBooking) query.where({ villa_type_id: input.villaTypeId });
+    else query.where({ villa_id: input.villaId });
+  }).select('villa_id', 'check_in', 'check_out');
+  const unavailableDates = [];
+  for (const cursor = new Date(start); cursor <= end; cursor.setUTCDate(cursor.getUTCDate() + 1)) {
+    const date = cursor.toISOString().slice(0, 10);
+    const bookings = reservations.filter((reservation) => {
+      const checkIn = String(reservation.check_in).slice(0, 10);
+      const checkOut = String(reservation.check_out).slice(0, 10);
+      return input.bookingKind === 'day_tour' ? checkIn === date : checkIn <= date && checkOut > date;
+    });
+    if (bookings.length >= capacity) unavailableDates.push(date);
+  }
+  return { unavailableDates };
 }
 
 export async function findVillaForUser(villaId, user) {
@@ -100,7 +158,7 @@ export async function createVilla(input) {
     const [id] = await trx('villas').insert({
       name: input.name, slug: input.slug, location: input.location, description: input.description,
       nightly_price: input.nightlyPrice, capacity: input.capacity, bedroom_count: input.bedroomCount,
-      status: input.status, availability_status: input.availabilityStatus, owner_user_id: input.ownerUserId, villa_type_id: input.villaTypeId || null
+      status: input.status, availability_status: input.availabilityStatus, standard_check_in: input.standardCheckIn, standard_check_out: input.standardCheckOut, owner_user_id: input.ownerUserId, villa_type_id: input.villaTypeId || null
     });
 
     if (input.amenities?.length) {
@@ -122,7 +180,7 @@ export async function updateVilla(villaId, input) {
     await trx('villas').where({ id: villaId }).update({
       name: input.name, slug: input.slug, location: input.location, description: input.description,
       nightly_price: input.nightlyPrice, capacity: input.capacity, bedroom_count: input.bedroomCount,
-      status: input.status, availability_status: input.availabilityStatus, owner_user_id: input.ownerUserId, villa_type_id: input.villaTypeId || null
+      status: input.status, availability_status: input.availabilityStatus, standard_check_in: input.standardCheckIn, standard_check_out: input.standardCheckOut, owner_user_id: input.ownerUserId, villa_type_id: input.villaTypeId || null
     });
     if (input.amenities) {
       await trx('villa_amenities').where({ villa_id: villaId }).del();
@@ -136,6 +194,22 @@ export async function updateVilla(villaId, input) {
       }
     }
   });
+}
+
+export async function updateVillaMapPosition(villaId, input, user) {
+  const db = database();
+  const query = db('villas').where({ id: villaId });
+  if (user.role === 'host') query.where({ owner_user_id: user.id });
+  if (!(await query.first())) throw new ApiError(404, 'Villa not found');
+  await db('villas').where({ id: villaId }).update({ map_x: input.mapX, map_y: input.mapY });
+}
+
+export async function archiveVilla(villaId, user) {
+  const db = database();
+  const query = db('villas').where({ id: villaId });
+  if (user.role === 'host') query.where({ owner_user_id: user.id });
+  const updated = await query.update({ status: 'inactive' });
+  if (!updated) throw new ApiError(404, 'Villa not found');
 }
 
 export async function addAmenity(villaId, name) {
@@ -176,10 +250,10 @@ export async function listReservationsForRole(user) {
 
 export async function updateReservation(reservationId, input, user) {
   const db = database();
-  const accessibleReservation = await accessQuery(
-    db('reservations').join('villas', 'villas.id', 'reservations.villa_id').select('reservations.id').where('reservations.id', reservationId),
-    user
-  ).first();
+  const reservationQuery = db('reservations').join('villas', 'villas.id', 'reservations.villa_id').select('reservations.id').where('reservations.id', reservationId);
+  const accessibleReservation = user.role === 'receptionist'
+    ? await reservationQuery.whereNotNull('reservations.villa_id').first()
+    : await accessQuery(reservationQuery, user).first();
   if (!accessibleReservation) throw new ApiError(404, 'Reservation not found');
   await db('reservations').where({ id: reservationId }).update(input);
   if (input.booking_status === 'confirmed') {
@@ -201,7 +275,9 @@ export async function createPublicReservation(input) {
       if (type?.day_tour_only) throw new ApiError(400, 'This Villa Type is available for Day Tours only');
     }
     if (input.guests > villa.capacity) throw new ApiError(400, `This villa accommodates up to ${villa.capacity} guests`);
-    const conflictQuery = trx('reservations').whereIn('booking_status', ['pending', 'confirmed', 'checked_in']).where('check_in', '<', input.checkOut).where('check_out', '>', input.checkIn);
+    const conflictQuery = trx('reservations').whereIn('booking_status', ['pending', 'confirmed', 'checked_in']);
+    if (input.bookingKind === 'day_tour') conflictQuery.where({ check_in: input.checkIn, check_out: input.checkIn });
+    else conflictQuery.where('check_in', '<', input.checkOut).where('check_out', '>', input.checkIn);
     if (typeBooking) {
       const [{ count: availableRooms }] = await trx('villas').join('villa_types', 'villa_types.id', 'villas.villa_type_id').where({ 'villas.villa_type_id': input.villaTypeId, 'villas.status': 'active', 'villas.availability_status': 'available', 'villa_types.is_active': true, 'villa_types.status': 'active', 'villa_types.availability_status': 'available' }).count({ count: '*' });
       const [{ count: bookedRooms }] = await conflictQuery.where({ villa_type_id: input.villaTypeId }).count({ count: '*' });
@@ -211,13 +287,18 @@ export async function createPublicReservation(input) {
     }
     const referenceNumber = `BRS-${Date.now().toString(36).toUpperCase()}`;
     const assignedVillaId = typeBooking && input.operatingMode !== 'hotel' ? villa.id : input.operatingMode === 'hotel' ? null : input.villaId;
-    const [id] = await trx('reservations').insert({ villa_id: assignedVillaId, villa_type_id: typeBooking ? input.villaTypeId : null, booking_kind: input.bookingKind, payment_method: input.paymentMethod, payment_status: input.paymentMethod === 'cash' ? 'pending' : 'paid', total_amount: input.totalAmount, reference_number: referenceNumber, guest_user_id: input.guestUserId || null, guest_name: input.guestName, guest_email: input.guestEmail, check_in: input.checkIn, check_out: input.bookingKind === 'day_tour' ? input.checkIn : input.checkOut, status: 'pending', booking_status: 'pending' });
-    if (input.serviceIds?.length) {
-      const selectedServices = await trx('services').whereIn('id', input.serviceIds).where('is_active', true);
-      await trx('reservation_services').insert(selectedServices.map((service) => ({ reservation_id: id, service_id: service.id, unit_price: service.price, quantity: 1 })));
-    }
+    const selectedServices = input.serviceIds?.length ? await trx('services').whereIn('id', input.serviceIds).where('is_active', true) : [];
+    const selectedMenuItems = input.menuItemIds?.length ? await trx('menu_items').whereIn('id', input.menuItemIds).where({ is_active: true, is_available: true }) : [];
+    const stayTotal = await calculateVillaStayTotal(trx, villa.id, input.checkIn, input.bookingKind === 'day_tour' ? input.checkIn : input.checkOut, villa.nightly_price, input.bookingKind);
+    const serviceTotal = selectedServices.reduce((sum, service) => sum + Number(service.price || 0) * Number(input.serviceQuantities?.[service.id] || 1), 0);
+    const menuTotal = selectedMenuItems.reduce((sum, item) => sum + Number(item.price || 0) * Number(input.menuQuantities?.[item.id] || 1), 0);
+    const totalAmount = stayTotal + serviceTotal + menuTotal;
+    const paymentPending = ['cash', 'pay_later'].includes(input.paymentMethod);
+    const [id] = await trx('reservations').insert({ villa_id: assignedVillaId, villa_type_id: typeBooking ? input.villaTypeId : null, booking_kind: input.bookingKind, payment_method: input.paymentMethod, payment_status: paymentPending ? 'pending' : 'paid', total_amount: totalAmount, reference_number: referenceNumber, guest_user_id: input.guestUserId || null, guest_name: input.guestName, guest_email: input.guestEmail, guest_note: input.guestNote || null, check_in: input.checkIn, check_out: input.bookingKind === 'day_tour' ? input.checkIn : input.checkOut, status: 'pending', booking_status: 'pending' });
+    if (selectedServices.length) await trx('reservation_services').insert(selectedServices.map((service) => ({ reservation_id: id, service_id: service.id, unit_price: service.price, quantity: Number(input.serviceQuantities?.[service.id] || 1) })));
+    if (selectedMenuItems.length) await trx('reservation_charges').insert(selectedMenuItems.map((item) => { const quantity = Number(input.menuQuantities?.[item.id] || 1); return { reservation_id: id, item_type: 'food', item_id: item.id, description: item.name, quantity, unit_price: item.price, total_amount: Number(item.price) * quantity }; }));
     await trx('reservation_emails').insert({ reservation_id: id, recipient: input.guestEmail, template: 'reservation-received', status: 'sent' });
-    return { id: String(id), referenceNumber, villaId: assignedVillaId ? String(assignedVillaId) : null, villaTypeId: typeBooking ? String(input.villaTypeId) : null, guestName: input.guestName, guestEmail: input.guestEmail, checkIn: input.checkIn, checkOut: input.checkOut, bookingStatus: 'pending', paymentStatus: input.paymentMethod === 'cash' ? 'pending' : 'paid', totalAmount: input.totalAmount };
+    return { id: String(id), referenceNumber, villaId: assignedVillaId ? String(assignedVillaId) : null, villaTypeId: typeBooking ? String(input.villaTypeId) : null, guestName: input.guestName, guestEmail: input.guestEmail, checkIn: input.checkIn, checkOut: input.checkOut, bookingStatus: 'pending', paymentStatus: paymentPending ? 'pending' : 'paid', totalAmount };
   });
 }
 

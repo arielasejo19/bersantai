@@ -1,0 +1,4 @@
+import { z } from 'zod';
+const mediaUrl = z.string().max(1000).refine((value) => /^https?:\/\/\S+$/i.test(value) || value.startsWith('/uploads/'), 'Media URL must be an HTTP URL or uploaded media path');
+export const menuCategorySchema = z.object({ name: z.string().trim().min(2).max(100), slug: z.string().trim().min(2).max(120).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/), isActive: z.boolean().default(true) });
+export const menuItemSchema = z.object({ name: z.string().trim().min(2).max(180), slug: z.string().trim().min(2).max(220).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/), description: z.string().trim().max(5000).default(''), imageUrl: mediaUrl.optional().nullable(), categoryId: z.coerce.number().int().positive().optional().nullable(), mealOfDay: z.enum(['breakfast', 'lunch', 'dinner', 'brunch', 'late-night']).optional().nullable(), price: z.coerce.number().min(0), isAvailable: z.boolean().default(true), isActive: z.boolean().default(true) });

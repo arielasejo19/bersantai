@@ -1,0 +1,32 @@
+<script setup>
+import { onMounted, reactive, ref, watch } from 'vue';
+import { serviceService } from '@/services/serviceService';
+import { menuService } from '@/services/menuService';
+import { villaService } from '@/services/villaService';
+import { formatCurrency } from '@/services/currency';
+
+const props = defineProps({ reservation: { type: Object, default: null } });
+const statement = ref(null);
+const services = ref([]);
+const foods = ref([]);
+const error = ref('');
+const chargeSaving = ref(false);
+const paymentSaving = ref(false);
+const chargeForm = reactive({ itemType: 'food', itemId: '', quantity: 1 });
+const paymentForm = reactive({ amount: 0, paymentMethod: 'cash', reference: '' });
+
+async function loadItems() { const [serviceResult, foodResult] = await Promise.all([serviceService.listPublic(), menuService.listPublic()]); services.value = serviceResult.services; foods.value = foodResult.menuItems; }
+async function loadStatement() { if (!props.reservation?.id) { statement.value = null; return; } try { statement.value = (await villaService.reservationStatement(props.reservation.id)).statement; paymentForm.amount = statement.value.balance; } catch (requestError) { error.value = requestError.message; } }
+function itemOptions() { return chargeForm.itemType === 'food' ? foods.value : services.value; }
+function itemName(item) { return chargeForm.itemType === 'food' ? item.name : item.title; }
+function itemPrice(item) { return Number(item.price || 0); }
+async function addCharge() { chargeSaving.value = true; error.value = ''; try { statement.value = (await villaService.addReservationCharge(props.reservation.id, { itemType: chargeForm.itemType, itemId: Number(chargeForm.itemId), quantity: Number(chargeForm.quantity) })).statement; chargeForm.itemId = ''; chargeForm.quantity = 1; paymentForm.amount = statement.value.balance; } catch (requestError) { error.value = requestError.message; } finally { chargeSaving.value = false; } }
+async function removeCharge(charge) { try { statement.value = (await villaService.removeReservationCharge(props.reservation.id, charge.id)).statement; paymentForm.amount = statement.value.balance; } catch (requestError) { error.value = requestError.message; } }
+async function collectPayment() { paymentSaving.value = true; error.value = ''; try { statement.value = (await villaService.collectReservationPayment(props.reservation.id, { ...paymentForm, amount: Number(paymentForm.amount), reference: paymentForm.reference || null })).statement; paymentForm.amount = statement.value.balance; } catch (requestError) { error.value = requestError.message; } finally { paymentSaving.value = false; } }
+watch(() => props.reservation?.id, loadStatement);
+onMounted(async () => { try { await loadItems(); await loadStatement(); } catch (requestError) { error.value = requestError.message; } });
+</script>
+
+<template>
+  <section class="statement-panel"><div class="statement-heading"><div><span class="eyebrow">Statement of account</span><h3>{{ reservation?.guest_name || 'Select a reservation' }}</h3><small v-if="reservation">{{ reservation.reference_number || reservation.id }} · {{ reservation.villa_name || reservation.villa_type_name || 'Unassigned room' }}</small></div><div v-if="statement" class="statement-balance"><small>Balance due</small><strong>{{ formatCurrency(statement.balance) }}</strong></div></div><p v-if="error" class="management-error" role="alert">{{ error }}</p><template v-if="statement"><div class="statement-summary"><span>Room & stay <strong>{{ formatCurrency(statement.roomTotal) }}</strong></span><span>Added charges <strong>{{ formatCurrency(statement.chargesTotal) }}</strong></span><span>Total <strong>{{ formatCurrency(statement.total) }}</strong></span><span>Paid <strong>{{ formatCurrency(statement.paymentsTotal) }}</strong></span></div><div class="statement-columns"><form class="statement-form" @submit.prevent="addCharge"><h4>Add food or service</h4><div class="charge-type-toggle"><button :class="{ active: chargeForm.itemType === 'food' }" type="button" @click="chargeForm.itemType = 'food'; chargeForm.itemId = ''">Food</button><button :class="{ active: chargeForm.itemType === 'service' }" type="button" @click="chargeForm.itemType = 'service'; chargeForm.itemId = ''">Service</button></div><label>Item<select v-model="chargeForm.itemId" required><option value="">Choose an item</option><option v-for="item in itemOptions()" :key="item.id" :value="item.id">{{ itemName(item) }} · {{ formatCurrency(itemPrice(item)) }}</option></select></label><label>Quantity<input v-model="chargeForm.quantity" type="number" min="1" max="100" required></label><button class="dashboard-primary" type="submit" :disabled="chargeSaving || !chargeForm.itemId">{{ chargeSaving ? 'Adding...' : 'Add to statement' }}</button></form><form class="statement-form" @submit.prevent="collectPayment"><h4>Collect payment</h4><label>Amount<input v-model="paymentForm.amount" type="number" min="0.01" :max="statement.balance" step="0.01" required></label><label>Payment method<select v-model="paymentForm.paymentMethod"><option value="cash">Cash</option><option value="card">Card</option><option value="online">Online</option><option value="bank_transfer">Bank transfer</option></select></label><label>Reference <small>Optional</small><input v-model="paymentForm.reference" placeholder="Receipt or transaction number"></label><button class="dashboard-primary" type="submit" :disabled="paymentSaving || statement.balance <= 0">{{ paymentSaving ? 'Recording...' : 'Record payment' }}</button></form></div><div class="statement-ledger"><h4>Charges</h4><p v-if="!statement.charges.length" class="statement-empty">No food or service charges.</p><div v-for="charge in statement.charges" :key="charge.id" class="statement-line"><span>{{ charge.description }} × {{ charge.quantity }}</span><strong>{{ formatCurrency(charge.totalAmount) }}</strong><button type="button" aria-label="Remove charge" @click="removeCharge(charge)">×</button></div><h4>Payments</h4><p v-if="!statement.payments.length" class="statement-empty">No payments collected.</p><div v-for="payment in statement.payments" :key="payment.id" class="statement-line"><span>{{ payment.paymentMethod }}<small v-if="payment.reference"> · {{ payment.reference }}</small></span><strong>{{ formatCurrency(payment.amount) }}</strong><span class="payment-recorded">Recorded</span></div></div></template><p v-else class="empty-state">Click a booking in the calendar to open its statement.</p></section>
+</template>

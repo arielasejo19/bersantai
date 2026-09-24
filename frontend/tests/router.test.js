@@ -45,4 +45,16 @@ describe('router guards', () => {
 
     expect(router.currentRoute.value.name).toBe('management');
   });
+
+  it('keeps an authenticated guest on the separate host login screen', async () => {
+    const { default: router } = await import('../src/router');
+    const store = useAuthStore();
+    store.initialized = true;
+    store.user = { role: 'guest' };
+
+    await router.push('/host/login');
+    await router.isReady();
+
+    expect(router.currentRoute.value.name).toBe('host-login');
+  });
 });

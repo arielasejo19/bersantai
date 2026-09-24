@@ -1,0 +1,2 @@
+import * as repository from '../repositories/menuRepository.js';
+export const { listCategories, createCategory, updateCategory, deleteCategory, listItems, createItem, updateItem, deleteItem } = repository;

@@ -1,0 +1,14 @@
+import { Router } from 'express';
+import { createManagedPackage, deleteManagedPackage, listManagedPackages, listPublicPackages, updateManagedPackage, uploadManagedPackageMedia } from '../controllers/packageController.js';
+import { requireAuth, requireRole } from '../middleware/authMiddleware.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
+import { singleMediaUpload } from '../utils/mediaUpload.js';
+const router = Router();
+router.get('/public', asyncHandler(listPublicPackages));
+router.use(asyncHandler(requireAuth), requireRole('admin'));
+router.get('/', asyncHandler(listManagedPackages));
+router.post('/', asyncHandler(createManagedPackage));
+router.put('/:packageId', asyncHandler(updateManagedPackage));
+router.post('/:packageId/media', singleMediaUpload, asyncHandler(uploadManagedPackageMedia));
+router.delete('/:packageId', asyncHandler(deleteManagedPackage));
+export default router;

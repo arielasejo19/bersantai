@@ -5,5 +5,6 @@ export const serviceService = {
   list() { return apiClient.get('/services'); },
   create(payload) { return apiClient.post('/services', payload); },
   update(id, payload) { return apiClient.put(`/services/${id}`, payload); },
-  remove(id) { return apiClient.request(`/services/${id}`, { method: 'DELETE' }); }
+  remove(id) { return apiClient.request(`/services/${id}`, { method: 'DELETE' }); },
+  uploadMedia(id, formData) { return apiClient.post(`/services/${id}/media`, formData); }
 };

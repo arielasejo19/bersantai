@@ -38,7 +38,7 @@ async function submit() {
 </script>
 
 <template>
-  <main class="auth-shell">
+  <main class="auth-shell guest-auth-shell">
     <section class="auth-panel" aria-labelledby="register-title">
       <p class="eyebrow">Start relaxing</p>
       <h1 id="register-title">Create account</h1>

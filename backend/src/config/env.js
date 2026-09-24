@@ -16,6 +16,14 @@ export const env = {
   jwtSecret: process.env.JWT_SECRET,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
   authCookieName: process.env.AUTH_COOKIE_NAME || 'bersantai_session',
+  smtp: {
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: Number(process.env.SMTP_PORT || 587),
+    secure: process.env.SMTP_SECURE === 'true',
+    user: process.env.SMTP_USER?.trim(),
+    password: process.env.SMTP_PASSWORD?.replace(/\s+/g, ''),
+    from: process.env.SMTP_FROM || process.env.SMTP_USER
+  },
   supabaseUrl: process.env.SUPABASE_URL,
   supabaseAnonKey: process.env.SUPABASE_ANON_KEY
   ,socialAuthDevMode: process.env.SOCIAL_AUTH_DEV_MODE === 'true' || (process.env.NODE_ENV || 'development') !== 'production'
@@ -23,4 +31,8 @@ export const env = {
 
 export function hasDatabaseConfig() {
   return Boolean(env.db.host && env.db.database && env.db.user);
+}
+
+export function hasSmtpConfig() {
+  return Boolean(env.smtp.host && env.smtp.user && env.smtp.password && env.smtp.from);
 }

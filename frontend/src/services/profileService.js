@@ -5,6 +5,10 @@ export const profileService = {
     return apiClient.get('/profile');
   },
 
+  getBookings() {
+    return apiClient.get('/profile/bookings');
+  },
+
   updateProfile(payload) {
     return apiClient.put('/profile', payload);
   }

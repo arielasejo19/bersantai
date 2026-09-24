@@ -1,0 +1,18 @@
+import { Router } from 'express';
+import { createMenuCategory, createMenuItem, deleteMenuCategory, deleteMenuItem, listManagedMenuItems, listMenuCategories, listPublicMenuItems, updateMenuCategory, updateMenuItem, uploadMenuItemMedia } from '../controllers/menuController.js';
+import { requireAuth, requireRole } from '../middleware/authMiddleware.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
+import { singleMediaUpload } from '../utils/mediaUpload.js';
+const router = Router();
+router.get('/public', asyncHandler(listPublicMenuItems));
+router.use(asyncHandler(requireAuth), requireRole('admin'));
+router.get('/', asyncHandler(listManagedMenuItems));
+router.get('/categories', asyncHandler(listMenuCategories));
+router.post('/categories', asyncHandler(createMenuCategory));
+router.put('/categories/:categoryId', asyncHandler(updateMenuCategory));
+router.delete('/categories/:categoryId', asyncHandler(deleteMenuCategory));
+router.post('/', asyncHandler(createMenuItem));
+router.put('/:menuItemId', asyncHandler(updateMenuItem));
+router.post('/:menuItemId/media', singleMediaUpload, asyncHandler(uploadMenuItemMedia));
+router.delete('/:menuItemId', asyncHandler(deleteMenuItem));
+export default router;

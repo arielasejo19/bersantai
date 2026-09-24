@@ -1,0 +1,3 @@
+import { z } from 'zod';
+const mediaUrl = z.string().max(1000).refine((value) => /^https?:\/\/\S+$/i.test(value) || value.startsWith('/uploads/'), 'Media URL must be an HTTP URL or uploaded media path');
+export const packageSchema = z.object({ name: z.string().trim().min(2).max(180), slug: z.string().trim().min(2).max(220).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/), description: z.string().trim().max(5000).default(''), imageUrl: mediaUrl.optional().nullable(), price: z.coerce.number().min(0), isAvailable: z.boolean().default(true), isActive: z.boolean().default(true), villaIds: z.array(z.coerce.number().int().positive()).min(1), menuItems: z.array(z.object({ menuItemId: z.coerce.number().int().positive(), quantity: z.coerce.number().int().positive().default(1) })).min(1) });

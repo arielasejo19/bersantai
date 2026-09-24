@@ -13,7 +13,7 @@ function toService(row) {
     title: row.title,
     slug: row.slug,
     description: row.description,
-    imageUrl: row.image_url, price: Number(row.price || 0), category: row.category, dayTourOnly: Boolean(row.day_tour_only),
+    imageUrl: row.image_url, mediaType: row.media_type || 'image', price: Number(row.price || 0), category: row.category, dayTourOnly: Boolean(row.day_tour_only),
     isActive: Boolean(row.is_active),
     sortOrder: row.sort_order,
     createdAt: row.created_at,
@@ -43,4 +43,11 @@ export async function updateService(id, input) {
 export async function deleteService(id) {
   const deleted = await database()('services').where({ id }).del();
   if (!deleted) throw new ApiError(404, 'Service not found');
+}
+
+export async function updateServiceMedia(id, media) {
+  const db = database();
+  const count = await db('services').where({ id }).update({ image_url: media.url, media_type: media.mediaType });
+  if (!count) throw new ApiError(404, 'Service not found');
+  return toService(await db('services').where({ id }).first());
 }

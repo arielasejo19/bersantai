@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700">
+  <rect width="1200" height="700" fill="#e8e4d5"/>
+  <path d="M-30 135 C180 70 310 210 485 135 S790 70 1230 165" fill="none" stroke="#d1c6a9" stroke-width="54"/>
+  <path d="M-30 135 C180 70 310 210 485 135 S790 70 1230 165" fill="none" stroke="#fffaf0" stroke-width="32"/>
+  <path d="M95 720 C160 520 270 455 385 405 S610 300 705 -30" fill="none" stroke="#c7b88f" stroke-width="48"/>
+  <path d="M95 720 C160 520 270 455 385 405 S610 300 705 -30" fill="none" stroke="#fffaf0" stroke-width="27"/>
+  <path d="M800 720 C755 590 830 500 965 430 S1120 290 1220 235" fill="none" stroke="#d0c29e" stroke-width="34"/>
+  <path d="M800 720 C755 590 830 500 965 430 S1120 290 1220 235" fill="none" stroke="#fffaf0" stroke-width="20"/>
+  <path d="M230 0 C250 170 420 225 560 255 S790 400 840 700" fill="none" stroke="#a9c3a5" stroke-width="15" opacity=".72"/>
+  <path d="M230 0 C250 170 420 225 560 255 S790 400 840 700" fill="none" stroke="#dce8d5" stroke-width="9"/>
+  <g fill="#b7c9a8" opacity=".5"><circle cx="170" cy="310" r="75"/><circle cx="930" cy="180" r="90"/><circle cx="1000" cy="590" r="115"/><circle cx="430" cy="610" r="86"/></g>
+  <g fill="#65756d" font-family="Arial,sans-serif" font-size="22" letter-spacing="2"><text x="92" y="92">KINTAMANI</text><text x="860" y="110">MUNDUK</text><text x="890" y="660">BEDUGUL</text><text x="485" y="350" fill="#8b652c">BERSANTAI HIGHLANDS</text></g>
+</svg>

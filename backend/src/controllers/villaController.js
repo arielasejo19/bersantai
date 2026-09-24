@@ -1,15 +1,22 @@
-import { addVillaAmenity, addVillaPhoto, assignReservation, assignVillaReceptionist, bookVilla, changeReservationStatus, createManagedVilla, editVilla, getAccounts, getPublicAvailability, getPublicVilla, getPublicVillas, getReservations, getVilla, getVillaReservations, getVillas, inviteStaff, uploadVillaMedia } from '../services/villaService.js';
+import { addVillaAmenity, addVillaPhoto, archiveManagedVilla, assignReservation, assignVillaReceptionist, bookVilla, changeReservationStatus, createManagedVilla, editVilla, getAccounts, getCalendarVillas, getPublicAvailability, getPublicAvailabilityCalendar, getPublicVilla, getPublicVillas, getReservations, getVilla, getVillaReservations, getVillas, inviteStaff, setVillaMapPosition, uploadVillaMedia } from '../services/villaService.js';
 import { amenitySchema, bookingSchema, photoSchema, reservationStatusSchema, staffInviteSchema, villaSchema } from '../validators/villaValidators.js';
 import { validateBody } from '../validators/validate.js';
+import { z } from 'zod';
+import { getPricingEstimate } from '../services/villaService.js';
 
 export async function listVillas(request, response) { response.json({ villas: await getVillas(request.user) }); }
+export async function listCalendarVillas(request, response) { response.json({ villas: await getCalendarVillas(request.user) }); }
 export async function listPublicVillas(_request, response) { response.json({ villas: await getPublicVillas() }); }
 export async function showPublicVilla(request, response) { response.json({ villa: await getPublicVilla(request.params.villaId) }); }
 export async function checkAvailability(request, response) { response.json(await getPublicAvailability({ villaId: request.query.villaId, villaTypeId: request.query.villaTypeId, bookingKind: request.query.bookingKind, checkIn: request.query.checkIn, checkOut: request.query.checkOut })); }
+export async function availabilityCalendar(request, response) { response.json(await getPublicAvailabilityCalendar({ villaId: request.query.villaId, villaTypeId: request.query.villaTypeId, bookingKind: request.query.bookingKind, startDate: request.query.startDate, endDate: request.query.endDate })); }
+export async function estimatePricing(request, response) { response.json(await getPricingEstimate({ villaId: request.query.villaId, villaTypeId: request.query.villaTypeId, bookingKind: request.query.bookingKind, checkIn: request.query.checkIn, checkOut: request.query.checkOut })); }
 export async function createBooking(request, response) { response.status(201).json({ reservation: await bookVilla(validateBody(bookingSchema, request.body), request.user) }); }
 export async function showVilla(request, response) { response.json({ villa: await getVilla(request.params.villaId, request.user) }); }
 export async function createVilla(request, response) { response.status(201).json({ villa: await createManagedVilla(validateBody(villaSchema, request.body)) }); }
 export async function updateVilla(request, response) { response.json({ villa: await editVilla(request.params.villaId, validateBody(villaSchema, request.body), request.user) }); }
+export async function archiveVilla(request, response) { await archiveManagedVilla(request.params.villaId, request.user); response.status(204).send(); }
+export async function updateVillaMap(request, response) { await setVillaMapPosition(request.params.villaId, validateBody(z.object({ mapX: z.coerce.number().min(0).max(100), mapY: z.coerce.number().min(0).max(100) }), request.body), request.user); response.status(204).send(); }
 export async function createAmenity(request, response) { response.status(201).json({ villa: await addVillaAmenity(request.params.villaId, validateBody(amenitySchema, request.body).name, request.user) }); }
 export async function createPhoto(request, response) { response.status(201).json({ villa: await addVillaPhoto(request.params.villaId, validateBody(photoSchema, request.body), request.user) }); }
 export async function uploadMedia(request, response) { response.status(201).json({ villa: await uploadVillaMedia(request.params.villaId, request.files || [], request.user) }); }

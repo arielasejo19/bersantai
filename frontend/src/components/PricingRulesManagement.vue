@@ -1,0 +1,29 @@
+<script setup>
+import { computed, onMounted, reactive, ref } from 'vue';
+import { villaService } from '@/services/villaService';
+import { formatCurrency } from '@/services/currency';
+
+const villas = ref([]);
+const rules = ref([]);
+const selected = ref(null);
+const saving = ref(false);
+const error = ref('');
+const form = reactive({ scopeType: 'villa', villaId: '', villaTypeId: '', name: '', stayType: 'both', ruleType: 'weekday', startsOn: '', endsOn: '', price: 0, isActive: true });
+const villaTypes = computed(() => { const seen = new Map(); villas.value.forEach((villa) => { if (villa.villaType && !seen.has(String(villa.villaType.id))) seen.set(String(villa.villaType.id), villa.villaType); }); return [...seen.values()]; });
+
+function reset() { selected.value = null; Object.assign(form, { scopeType: 'villa', villaId: villas.value[0]?.id || '', villaTypeId: villaTypes.value[0]?.id || '', name: '', stayType: 'both', ruleType: 'weekday', startsOn: '', endsOn: '', price: 0, isActive: true }); }
+function edit(rule) { selected.value = rule; Object.assign(form, { ...rule, scopeType: rule.scopeType || 'villa', villaId: rule.villaId || '', villaTypeId: rule.villaTypeId || '', startsOn: rule.startsOn || '', endsOn: rule.endsOn || '' }); }
+async function load() { const [villaResult, ruleResult] = await Promise.all([villaService.list(), villaService.listPricingRules()]); villas.value = villaResult.villas; rules.value = ruleResult.pricingRules; if (!form.villaId) form.villaId = villas.value[0]?.id || ''; }
+async function save() { saving.value = true; error.value = ''; try { const payload = { ...form, villaId: form.scopeType === 'villa' ? Number(form.villaId) : null, villaTypeId: form.scopeType === 'villa_type' ? Number(form.villaTypeId) : null, price: Number(form.price), startsOn: form.ruleType === 'holiday' ? form.startsOn : null, endsOn: form.ruleType === 'holiday' ? form.endsOn : null }; if (selected.value) await villaService.updatePricingRule(selected.value.id, payload); else await villaService.createPricingRule(payload); reset(); await load(); } catch (requestError) { error.value = requestError.message; } finally { saving.value = false; } }
+async function remove(rule) { if (!window.confirm(`Remove ${rule.name}?`)) return; try { await villaService.removePricingRule(rule.id); await load(); } catch (requestError) { error.value = requestError.message; } }
+onMounted(async () => { try { await load(); } catch (requestError) { error.value = requestError.message; } });
+</script>
+
+<template>
+  <div class="dashboard-toolbar"><div><h2>Flexible pricing</h2><p>Set seasonal rates for weekdays, weekends, and holiday date ranges.</p></div><button class="dashboard-primary" type="button" @click="reset">＋ Add pricing rule</button></div>
+  <p v-if="error" class="management-error" role="alert">{{ error }}</p>
+  <div class="pricing-management-layout">
+    <section class="account-form-panel"><div class="menu-panel-heading"><div><span class="eyebrow">{{ selected ? 'Edit pricing rule' : 'New pricing rule' }}</span><h3>{{ selected ? 'Update a rate' : 'Add a rate' }}</h3></div><button v-if="selected" class="menu-reset" type="button" @click="reset">New rule</button></div><form class="management-form" @submit.prevent="save"><label>Pricing applies to<select v-model="form.scopeType"><option value="villa">One villa</option><option value="villa_type">Villa type</option></select></label><label v-if="form.scopeType === 'villa'">Villa<select v-model="form.villaId" required><option v-for="villa in villas" :key="villa.id" :value="villa.id">{{ villa.name }} · {{ villa.location }}</option></select></label><label v-else>Villa type<select v-model="form.villaTypeId" required><option v-for="type in villaTypes" :key="type.id" :value="type.id">{{ type.name }}</option></select></label><label>Rule name<input v-model="form.name" placeholder="Weekend rate" required></label><label>Stay type<select v-model="form.stayType"><option value="both">Overnight & day tour</option><option value="overnight">Overnight only</option><option value="day_tour">Day Tour only</option></select></label><label>Rate type<select v-model="form.ruleType"><option value="weekday">Weekdays</option><option value="weekend">Weekends</option><option value="holiday">Holiday period</option></select></label><div v-if="form.ruleType === 'holiday'" class="menu-form-grid"><label>Starts<input v-model="form.startsOn" type="date" required></label><label>Ends<input v-model="form.endsOn" type="date" required></label></div><label>Nightly rate<input v-model="form.price" type="number" min="0" step="0.01" required></label><label class="service-toggle">Active<input v-model="form.isActive" type="checkbox"></label><button class="dashboard-primary" type="submit" :disabled="saving || !villas.length">{{ saving ? 'Saving...' : selected ? 'Save changes' : 'Create pricing rule' }}</button></form></section>
+    <section class="accounts-panel"><div class="account-toolbar"><div><h3>Rate calendar</h3><span>{{ rules.length }} rules</span></div></div><p v-if="!rules.length" class="empty-state">No flexible rates yet. Base villa prices are currently used.</p><div v-else class="pricing-rule-list"><article v-for="rule in rules" :key="rule.id" class="pricing-rule-row"><div><strong>{{ rule.name }}</strong><small>{{ rule.targetName }} · {{ rule.scopeType === 'villa_type' ? 'Villa type' : 'Villa' }} · {{ rule.stayType === 'day_tour' ? 'Day Tour' : rule.stayType === 'overnight' ? 'Overnight' : 'Both stays' }} · {{ rule.ruleType === 'holiday' ? `${rule.startsOn} to ${rule.endsOn}` : rule.ruleType }}</small></div><strong>{{ formatCurrency(rule.price) }}<small> / night</small></strong><span :class="{ inactive: !rule.isActive }">{{ rule.isActive ? 'Active' : 'Hidden' }}</span><button type="button" @click="edit(rule)">Edit</button><button type="button" @click="remove(rule)" aria-label="Delete pricing rule">×</button></article></div></section>
+  </div>
+</template>

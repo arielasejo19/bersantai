@@ -57,9 +57,21 @@ const router = createRouter({
       meta: { requiresAuth: true }
     },
     {
+      path: '/profile/bookings',
+      name: 'guest-bookings',
+      component: () => import('@/views/GuestBookingsView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
       path: '/management',
       name: 'management',
       component: ManagementView,
+      meta: { requiresAuth: true, managementOnly: true }
+    },
+    {
+      path: '/management/reservations/:reservationId',
+      name: 'reservation-detail',
+      component: () => import('@/views/ReservationDetailView.vue'),
       meta: { requiresAuth: true, managementOnly: true }
     }
     ,{
@@ -73,6 +85,54 @@ const router = createRouter({
       name: 'villa-edit',
       component: VillaEditorView,
       meta: { requiresAuth: true, managementOnly: true, villaEditor: true }
+    },
+    {
+      path: '/management/villa-types/new',
+      name: 'villa-type-create',
+      component: () => import('@/views/AdminContentEditorView.vue'),
+      meta: { requiresAuth: true, managementOnly: true, adminOnly: true, resource: 'villa-type' }
+    },
+    {
+      path: '/management/villa-types/:resourceId/edit',
+      name: 'villa-type-edit',
+      component: () => import('@/views/AdminContentEditorView.vue'),
+      meta: { requiresAuth: true, managementOnly: true, adminOnly: true, resource: 'villa-type' }
+    },
+    {
+      path: '/management/services/new',
+      name: 'service-create',
+      component: () => import('@/views/AdminContentEditorView.vue'),
+      meta: { requiresAuth: true, managementOnly: true, adminOnly: true, resource: 'service' }
+    },
+    {
+      path: '/management/services/:resourceId/edit',
+      name: 'service-edit',
+      component: () => import('@/views/AdminContentEditorView.vue'),
+      meta: { requiresAuth: true, managementOnly: true, adminOnly: true, resource: 'service' }
+    },
+    {
+      path: '/management/menus/new',
+      name: 'menu-create',
+      component: () => import('@/views/AdminContentEditorView.vue'),
+      meta: { requiresAuth: true, managementOnly: true, adminOnly: true, resource: 'menu' }
+    },
+    {
+      path: '/management/menus/:resourceId/edit',
+      name: 'menu-edit',
+      component: () => import('@/views/AdminContentEditorView.vue'),
+      meta: { requiresAuth: true, managementOnly: true, adminOnly: true, resource: 'menu' }
+    },
+    {
+      path: '/management/packages/new',
+      name: 'package-create',
+      component: () => import('@/views/AdminContentEditorView.vue'),
+      meta: { requiresAuth: true, managementOnly: true, adminOnly: true, resource: 'package' }
+    },
+    {
+      path: '/management/packages/:resourceId/edit',
+      name: 'package-edit',
+      component: () => import('@/views/AdminContentEditorView.vue'),
+      meta: { requiresAuth: true, managementOnly: true, adminOnly: true, resource: 'package' }
     }
   ]
 });
@@ -94,10 +154,15 @@ router.beforeEach(async (to) => {
     return { name: 'management' };
   }
 
+  if (to.meta.adminOnly && authStore.user?.role !== 'admin') {
+    return { name: 'management' };
+  }
+
   if (to.meta.guestOnly && authStore.isAuthenticated) {
     if (to.meta.hostLogin && ['admin', 'host', 'receptionist'].includes(authStore.user?.role)) {
       return { name: 'management' };
     }
+    if (to.meta.hostLogin) return true;
     return { name: 'profile' };
   }
 

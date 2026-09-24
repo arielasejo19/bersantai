@@ -183,6 +183,65 @@ POST   /api/v1/villas/staff                    # admin
 
 `POST /villas/staff` creates a host or receptionist account. If no password is supplied, the response contains a temporary password for out-of-band delivery. This is a local foundation for a future email invitation flow.
 
+## Menu And Package Management
+
+Public menu items and offers are available without authentication:
+
+```http
+GET /api/v1/menu-items/public
+GET /api/v1/packages/public
+```
+
+The admin-only menu API supports categories and food items:
+
+```http
+GET    /api/v1/menu-items
+GET    /api/v1/menu-items/categories
+POST   /api/v1/menu-items/categories
+PUT    /api/v1/menu-items/categories/:categoryId
+DELETE /api/v1/menu-items/categories/:categoryId
+POST   /api/v1/menu-items
+PUT    /api/v1/menu-items/:menuItemId
+DELETE /api/v1/menu-items/:menuItemId
+```
+
+Package CRUD is also admin-only. A package payload includes `villaIds`, `menuItems` (with `menuItemId` and `quantity`), `price`, `isAvailable`, and `isActive`. Package responses include the computed `originalPrice`, `savings`, and `discountPercent` values used by the public offers section.
+
+```http
+GET    /api/v1/packages
+POST   /api/v1/packages
+PUT    /api/v1/packages/:packageId
+DELETE /api/v1/packages/:packageId
+```
+
+Each managed content type accepts the same authenticated multipart upload format used by villa media. Send one image or video in the `media` field; supported types are JPG, PNG, WEBP, GIF, MP4, WEBM, and MOV up to 50 MB:
+
+```http
+POST /api/v1/villa-types/:villaTypeId/media
+POST /api/v1/services/:serviceId/media
+POST /api/v1/menu-items/:menuItemId/media
+POST /api/v1/packages/:packageId/media
+```
+
+## Reservations And Flexible Pricing
+
+The management reservation feed is role-scoped:
+
+```http
+GET /api/v1/villas/reservations
+```
+
+Admins and receptionists receive the operational reservation calendar. Hosts receive reservations for villas they own. Flexible villa pricing is managed by admins and hosts:
+
+```http
+GET    /api/v1/villas/pricing-rules
+POST   /api/v1/villas/pricing-rules
+PUT    /api/v1/villas/pricing-rules/:ruleId
+DELETE /api/v1/villas/pricing-rules/:ruleId
+```
+
+Pricing rules support `weekday`, `weekend`, and `holiday` types. Holiday date ranges take precedence, followed by weekday/weekend rules, followed by the villa's base nightly price. The server applies the resolved rate when creating a reservation; `GET /api/v1/villas/pricing` provides the public booking estimate.
+
 The first administrator must be promoted by an operator after registration, for example:
 
 ```sql
