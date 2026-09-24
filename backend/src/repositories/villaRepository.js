@@ -270,10 +270,8 @@ export async function createPublicReservation(input) {
       ? await trx('villas').join('villa_types', 'villa_types.id', 'villas.villa_type_id').where({ 'villas.villa_type_id': input.villaTypeId, 'villas.status': 'active', 'villas.availability_status': 'available', 'villa_types.is_active': true, 'villa_types.status': 'active', 'villa_types.availability_status': 'available' }).select('villas.*').orderBy('villas.id').first()
       : await trx('villas').where({ id: input.villaId, status: 'active', availability_status: 'available' }).first();
     if (!villa) throw new ApiError(404, 'This villa selection is not available for booking');
-    if (input.bookingKind === 'overnight' && villa.villa_type_id) {
-      const type = await trx('villa_types').where({ id: villa.villa_type_id }).first();
-      if (type?.day_tour_only) throw new ApiError(400, 'This Villa Type is available for Day Tours only');
-    }
+    const villaType = villa.villa_type_id ? await trx('villa_types').where({ id: villa.villa_type_id }).first() : null;
+    if (input.bookingKind === 'overnight' && villaType?.day_tour_only) throw new ApiError(400, 'This Villa Type is available for Day Tours only');
     if (input.guests > villa.capacity) throw new ApiError(400, `This villa accommodates up to ${villa.capacity} guests`);
     const conflictQuery = trx('reservations').whereIn('booking_status', ['pending', 'confirmed', 'checked_in']);
     if (input.bookingKind === 'day_tour') conflictQuery.where({ check_in: input.checkIn, check_out: input.checkIn });
@@ -292,14 +290,38 @@ export async function createPublicReservation(input) {
     const stayTotal = await calculateVillaStayTotal(trx, villa.id, input.checkIn, input.bookingKind === 'day_tour' ? input.checkIn : input.checkOut, villa.nightly_price, input.bookingKind);
     const serviceTotal = selectedServices.reduce((sum, service) => sum + Number(service.price || 0) * Number(input.serviceQuantities?.[service.id] || 1), 0);
     const menuTotal = selectedMenuItems.reduce((sum, item) => sum + Number(item.price || 0) * Number(input.menuQuantities?.[item.id] || 1), 0);
+    const serviceItems = selectedServices.map((service) => {
+      const quantity = Number(input.serviceQuantities?.[service.id] || 1);
+      return { name: service.title || service.name, quantity, totalAmount: Number(service.price || 0) * quantity };
+    });
+    const menuItems = selectedMenuItems.map((item) => {
+      const quantity = Number(input.menuQuantities?.[item.id] || 1);
+      return { name: item.name, quantity, totalAmount: Number(item.price || 0) * quantity };
+    });
     const totalAmount = stayTotal + serviceTotal + menuTotal;
     const paymentPending = ['cash', 'pay_later'].includes(input.paymentMethod);
     const [id] = await trx('reservations').insert({ villa_id: assignedVillaId, villa_type_id: typeBooking ? input.villaTypeId : null, booking_kind: input.bookingKind, payment_method: input.paymentMethod, payment_status: paymentPending ? 'pending' : 'paid', total_amount: totalAmount, reference_number: referenceNumber, guest_user_id: input.guestUserId || null, guest_name: input.guestName, guest_email: input.guestEmail, guest_note: input.guestNote || null, check_in: input.checkIn, check_out: input.bookingKind === 'day_tour' ? input.checkIn : input.checkOut, status: 'pending', booking_status: 'pending' });
     if (selectedServices.length) await trx('reservation_services').insert(selectedServices.map((service) => ({ reservation_id: id, service_id: service.id, unit_price: service.price, quantity: Number(input.serviceQuantities?.[service.id] || 1) })));
     if (selectedMenuItems.length) await trx('reservation_charges').insert(selectedMenuItems.map((item) => { const quantity = Number(input.menuQuantities?.[item.id] || 1); return { reservation_id: id, item_type: 'food', item_id: item.id, description: item.name, quantity, unit_price: item.price, total_amount: Number(item.price) * quantity }; }));
-    await trx('reservation_emails').insert({ reservation_id: id, recipient: input.guestEmail, template: 'reservation-received', status: 'sent' });
-    return { id: String(id), referenceNumber, villaId: assignedVillaId ? String(assignedVillaId) : null, villaTypeId: typeBooking ? String(input.villaTypeId) : null, guestName: input.guestName, guestEmail: input.guestEmail, checkIn: input.checkIn, checkOut: input.checkOut, bookingStatus: 'pending', paymentStatus: paymentPending ? 'pending' : 'paid', totalAmount };
+    await trx('reservation_emails').insert({ reservation_id: id, recipient: input.guestEmail, template: 'reservation-received', status: 'pending' });
+    return {
+      id: String(id), referenceNumber, villaId: assignedVillaId ? String(assignedVillaId) : null,
+      villaTypeId: typeBooking ? String(input.villaTypeId) : null,
+      villaName: typeBooking ? (villaType?.name || villa.name) : villa.name,
+      villaLocation: villa.location, guestName: input.guestName, guestEmail: input.guestEmail,
+      guestNote: input.guestNote || '', bookingKind: input.bookingKind, guests: input.guests,
+      paymentMethod: input.paymentMethod, checkIn: input.checkIn,
+      checkOut: input.bookingKind === 'day_tour' ? input.checkIn : input.checkOut,
+      bookingStatus: 'pending', paymentStatus: paymentPending ? 'pending' : 'paid', totalAmount,
+      serviceItems, menuItems
+    };
   });
+}
+
+export async function updateReservationEmailStatus(reservationId, status) {
+  await database()('reservation_emails')
+    .where({ reservation_id: reservationId, template: 'reservation-received' })
+    .update({ status });
 }
 
 export async function assignReservationVilla(reservationId, villaId) {

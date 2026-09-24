@@ -1,10 +1,11 @@
 import bcrypt from 'bcryptjs';
 import { randomUUID } from 'node:crypto';
 import { createManagedUser, listAccounts } from '../repositories/userRepository.js';
-import { addAmenity, addPhoto, archiveVilla, assignReceptionist, assignReservationVilla, checkPublicAvailability, checkPublicAvailabilityCalendar, createPublicReservation, createVilla, findPublicVilla, findVillaForUser, listCalendarVillas, listGuestReservations, listPublicVillas, listReservationsForRole, listReservationsForUser, listVillasForUser, updateReservation, updateVilla, updateVillaMapPosition } from '../repositories/villaRepository.js';
+import { addAmenity, addPhoto, archiveVilla, assignReceptionist, assignReservationVilla, checkPublicAvailability, checkPublicAvailabilityCalendar, createPublicReservation, createVilla, findPublicVilla, findVillaForUser, listCalendarVillas, listGuestReservations, listPublicVillas, listReservationsForRole, listReservationsForUser, listVillasForUser, updateReservation, updateReservationEmailStatus, updateVilla, updateVillaMapPosition } from '../repositories/villaRepository.js';
 import { ApiError } from '../utils/apiError.js';
 import { getOperatingMode } from '../repositories/settingsRepository.js';
 import { requireVerifiedBookingEmail } from './bookingVerificationService.js';
+import { sendBookingConfirmationEmail } from './emailService.js';
 import { storeMedia } from './mediaStorageService.js';
 import { calculateVillaStayRates } from '../repositories/pricingRepository.js';
 
@@ -39,7 +40,16 @@ export async function getPricingEstimate(input) {
 }
 export async function bookVilla(input, user) {
   if (!user?.emailVerified) await requireVerifiedBookingEmail(input.guestEmail, input.verificationToken);
-  return createPublicReservation({ ...input, guestUserId: user?.id || null, operatingMode: await getOperatingMode() });
+  const reservation = await createPublicReservation({ ...input, guestUserId: user?.id || null, operatingMode: await getOperatingMode() });
+  try {
+    await sendBookingConfirmationEmail(reservation);
+    reservation.confirmationEmailSent = true;
+    try { await updateReservationEmailStatus(reservation.id, 'sent'); } catch { }
+  } catch (_error) {
+    try { await updateReservationEmailStatus(reservation.id, 'failed'); } catch { }
+    reservation.confirmationEmailSent = false;
+  }
+  return reservation;
 }
 export const getVilla = (id, user) => findVillaForUser(id, user);
 

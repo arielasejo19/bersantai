@@ -43,7 +43,7 @@ async function submit() {
   <main class="auth-shell" :class="{ 'host-auth-shell': isHostLogin, 'guest-auth-shell': !isHostLogin }">
     <div class="host-nature" :class="{ 'guest-nature': !isHostLogin }" aria-hidden="true"><span class="host-leaf host-leaf-one"></span><span class="host-leaf host-leaf-two"></span><span class="host-leaf host-leaf-three"></span><span class="host-leaf host-leaf-four"></span><span class="host-light host-light-one"></span><span class="host-light host-light-two"></span><span class="thai-ornament thai-ornament-top"></span><span class="thai-ornament thai-ornament-bottom"></span></div>
     <section class="auth-panel" aria-labelledby="login-title">
-      <RouterLink v-if="isHostLogin" class="auth-brand" to="/" aria-label="Bersantai home"><img :src="'/icons/' + 'bersantai-logo.png'" alt="Bersantai Bali Private Resort" /></RouterLink>
+      <RouterLink class="auth-brand" to="/" aria-label="Bersantai home"><img :src="'/icons/' + 'bersantai-logo.png'" alt="Bersantai Bali Private Resort" /></RouterLink>
       <p class="eyebrow">{{ isHostLogin ? 'Bersantai partner portal' : 'Bersantai guest portal' }}</p>
       <h1 id="login-title">{{ isHostLogin ? 'Host login' : 'Guest login' }}</h1>
       <p v-if="isHostLogin" class="login-intro">Manage your villa, availability, and guest stays from one calm workspace.</p>

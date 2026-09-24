@@ -40,6 +40,7 @@ async function submit() {
 <template>
   <main class="auth-shell guest-auth-shell">
     <section class="auth-panel" aria-labelledby="register-title">
+      <RouterLink class="auth-brand" to="/" aria-label="Bersantai home"><img :src="'/icons/' + 'bersantai-logo.png'" alt="Bersantai Bali Private Resort" /></RouterLink>
       <p class="eyebrow">Start relaxing</p>
       <h1 id="register-title">Create account</h1>
 

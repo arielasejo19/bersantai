@@ -356,3 +356,39 @@ input, textarea { width: 100%; border: 1px solid #cfd8d3; border-radius: 8px; pa
   .leaf-curtain-leaf, .leaf-curtain-warmth { animation: none; }
   .leaf-curtain-leaf { opacity: 0; }
 }
+
+.booking-confirmation-page { width: min(100% - 48px, 900px); padding: 52px 0 90px; }
+.confirmation-intro { max-width: 650px; }
+.confirmation-intro .booking-success-icon { width: 52px; height: 52px; margin-bottom: 24px; }
+.confirmation-intro .eyebrow { color: #9a7136; }
+.confirmation-intro h1 { margin: 14px 0 18px; font-size: 4rem; line-height: 1; }
+.confirmation-intro > p:last-child { max-width: 58ch; margin: 0; color: #718079; line-height: 1.75; }
+.confirmation-intro > p:last-child strong { color: #173d3a; }
+.confirmation-email-notice { margin: 28px 0 0; border-left: 3px solid #b0833e; padding: 13px 16px; background: #f7f1e4; color: #70572f; font-size: .82rem; line-height: 1.6; }
+.confirmation-details { margin: 38px 0 10px; border-top: 1px solid #d8ddd4; }
+.confirmation-reference { display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid #d8ddd4; padding: 18px 0; }
+.confirmation-reference > div, .confirmation-detail-grid > div { display: grid; gap: 7px; }
+.confirmation-reference span, .confirmation-detail-grid > div > span, .confirmation-note > span { color: #89958d; font-size: .7rem; }
+.confirmation-reference strong { color: #173d3a; font-size: 1rem; }
+.confirmation-status { border: 1px solid #dfc990; padding: 6px 10px; color: #866328 !important; font-size: .68rem !important; text-transform: capitalize; }
+.confirmation-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 34px; }
+.confirmation-detail-grid > div { min-width: 0; align-content: start; border-bottom: 1px solid #e3e7e0; padding: 19px 0; }
+.confirmation-detail-grid strong { color: #173d3a; font-size: .88rem; font-weight: 600; line-height: 1.5; }
+.confirmation-detail-grid small { color: #89958d; font-size: .72rem; line-height: 1.5; }
+.confirmation-stay h2, .confirmation-extras h2 { margin: 0; color: #173d3a; font-size: 1.4rem; font-weight: 500; }
+.confirmation-stay p { margin: 0; color: #718079; font-size: .8rem; }
+.confirmation-extras { padding: 20px 0 8px; border-bottom: 1px solid #e3e7e0; }
+.confirmation-extras h2 { margin-bottom: 10px; font-size: 1.15rem; }
+.confirmation-extra-row { display: flex; justify-content: space-between; gap: 20px; padding: 9px 0; color: #52605a; font-size: .8rem; }
+.confirmation-extra-row strong { color: #173d3a; font-weight: 600; }
+.confirmation-note { display: grid; gap: 7px; margin: 0; border-bottom: 1px solid #e3e7e0; padding: 18px 0; color: #52605a; font-size: .8rem; line-height: 1.6; }
+.confirmation-total { display: flex; justify-content: space-between; gap: 20px; padding: 22px 0 12px; color: #718079; font-size: .82rem; }
+.confirmation-total strong { color: #173d3a; font-size: 1.25rem; }
+.confirmation-pending-note { margin: 0; color: #89958d; font-size: .73rem; line-height: 1.6; }
+.booking-confirmation-page > .button { margin-top: 28px; }
+@media (max-width: 600px) {
+  .booking-confirmation-page { width: min(100% - 32px, 900px); padding-top: 34px; }
+  .confirmation-intro h1 { font-size: 2.8rem; }
+  .confirmation-detail-grid { grid-template-columns: 1fr; gap: 0; }
+  .confirmation-reference { align-items: start; flex-direction: column; gap: 12px; }
+}

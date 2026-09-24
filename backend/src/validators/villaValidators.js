@@ -27,12 +27,12 @@ export const bookingSchema = z.object({
   menuQuantities: z.record(z.string(), z.coerce.number().int().positive()).default({}),
   paymentMethod: z.enum(['card', 'online', 'bank_transfer', 'pay_later', 'cash']).default('cash'),
   totalAmount: z.coerce.number().min(0).default(0),
-  verificationToken: z.string().uuid().optional(),
+  verificationToken: z.preprocess((value) => value === '' ? undefined : value, z.string().uuid().optional()),
   guestName: z.string().trim().min(2).max(180),
-  guestEmail: z.string().email().max(255),
+  guestEmail: z.string().trim().email().max(255).transform((value) => value.toLowerCase()),
   guestNote: z.string().trim().max(1000).default(''),
   checkIn: z.coerce.date(),
-  checkOut: z.coerce.date().optional(),
+  checkOut: z.preprocess((value) => value === '' ? undefined : value, z.coerce.date().optional()),
   guests: z.coerce.number().int().min(1).max(100)
 }).superRefine((value, context) => {
   if (!value.villaId && !value.villaTypeId) {

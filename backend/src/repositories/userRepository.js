@@ -17,6 +17,7 @@ function toSafeUser(row) {
   return {
     id: String(row.id),
     email: row.email,
+    emailVerified: Boolean(row.email_verified),
     role: row.role,
     accountStatus: row.account_status,
     displayName: row.display_name,
