@@ -1,13 +1,15 @@
 import bcrypt from 'bcryptjs';
 import { randomUUID } from 'node:crypto';
 import { createManagedUser, listAccounts } from '../repositories/userRepository.js';
-import { addAmenity, addPhoto, archiveVilla, assignReceptionist, assignReservationVilla, checkPublicAvailability, checkPublicAvailabilityCalendar, createPublicReservation, createVilla, findPublicVilla, findVillaForUser, listCalendarVillas, listGuestReservations, listPublicVillas, listReservationsForRole, listReservationsForUser, listVillasForUser, updateReservation, updateReservationEmailStatus, updateVilla, updateVillaMapPosition } from '../repositories/villaRepository.js';
+import { addAmenity, addPhoto, archiveVilla, assignReceptionist, checkPublicAvailability, checkPublicAvailabilityCalendar, createPublicReservation, createVilla, findPublicVilla, findVillaForUser, listCalendarVillas, listGuestReservations, listHostRevenueSummary, listPublicVillas, listReservationsForRole, listReservationsForUser, listVillasForUser, updateReservationEmailStatus, updateVilla, updateVillaMapPosition } from '../repositories/villaRepository.js';
+import { assignVillaToReservation, changeReservationState, checkInReservation, checkOutReservation, confirmReservation, getAssignableVillas, getReservationDetails, logReservationEmailAttempt } from '../repositories/reservationRepository.js';
 import { ApiError } from '../utils/apiError.js';
 import { getOperatingMode } from '../repositories/settingsRepository.js';
 import { requireVerifiedBookingEmail } from './bookingVerificationService.js';
-import { sendBookingConfirmationEmail } from './emailService.js';
+import { sendBookingConfirmationEmail, sendReservationEventEmail } from './emailService.js';
 import { storeMedia } from './mediaStorageService.js';
 import { calculateVillaStayRates } from '../repositories/pricingRepository.js';
+import { listReservationNotifications } from '../repositories/notificationRepository.js';
 
 const rounds = 12;
 
@@ -23,8 +25,12 @@ export async function getPricingEstimate(input) {
   const db = (await import('../config/database.js')).getDatabase();
   if (!db) throw new ApiError(503, 'Database is not configured');
   let villa;
+  let typeBasePrice;
   if (input.villaTypeId) {
-    const candidates = await db('villas').join('villa_types', 'villa_types.id', 'villas.villa_type_id').where({ 'villas.villa_type_id': input.villaTypeId }).select('villas.id', 'villas.villa_type_id', 'villas.nightly_price').orderBy('villas.id');
+    const villaType = await db('villa_types').where({ id: input.villaTypeId, is_active: true, status: 'active' }).first();
+    if (!villaType) throw new ApiError(404, 'Villa type not found');
+    typeBasePrice = Number(villaType.nightly_price || 0);
+    const candidates = await db('villas').where({ villa_type_id: input.villaTypeId, status: 'active' }).select('id', 'villa_type_id', 'nightly_price').orderBy('id');
     let matchingCandidate;
     for (const candidate of candidates) {
       const matchingRule = await db('villa_pricing_rules').where({ is_active: true }).where((query) => query.where({ villa_id: candidate.id }).orWhere({ villa_type_id: candidate.villa_type_id })).whereIn('stay_type', [input.bookingKind, 'both']).first();
@@ -35,8 +41,9 @@ export async function getPricingEstimate(input) {
     villa = await db('villas').where({ id: input.villaId }).select('id', 'villa_type_id', 'nightly_price').first();
   }
   if (!villa) throw new ApiError(404, 'Villa not found');
-  const dailyRates = await calculateVillaStayRates(db, villa.id, input.checkIn, input.bookingKind === 'day_tour' ? input.checkIn : input.checkOut, villa.nightly_price, input.bookingKind);
-  return { nightlyPrice: Number(villa.nightly_price || 0), stayTotal: dailyRates.reduce((total, rate) => total + rate.price, 0), dailyRates };
+  const nightlyPrice = typeBasePrice ?? Number(villa.nightly_price || 0);
+  const dailyRates = await calculateVillaStayRates(db, villa.id, input.checkIn, input.bookingKind === 'day_tour' ? input.checkIn : input.checkOut, nightlyPrice, input.bookingKind);
+  return { nightlyPrice, stayTotal: dailyRates.reduce((total, rate) => total + rate.price, 0), dailyRates };
 }
 export async function bookVilla(input, user) {
   if (!user?.emailVerified) await requireVerifiedBookingEmail(input.guestEmail, input.verificationToken);
@@ -45,8 +52,8 @@ export async function bookVilla(input, user) {
     await sendBookingConfirmationEmail(reservation);
     reservation.confirmationEmailSent = true;
     try { await updateReservationEmailStatus(reservation.id, 'sent'); } catch { }
-  } catch (_error) {
-    try { await updateReservationEmailStatus(reservation.id, 'failed'); } catch { }
+  } catch (emailError) {
+    try { await updateReservationEmailStatus(reservation.id, 'failed', emailError.message); } catch { }
     reservation.confirmationEmailSent = false;
   }
   return reservation;
@@ -88,11 +95,49 @@ export async function assignVillaReceptionist(id, userId, user) {
 export const getVillaReservations = (id, user) => listReservationsForUser(id, user);
 export const getGuestBookingReservations = (user) => listGuestReservations(user);
 export const getReservations = (user) => listReservationsForRole(user);
+export const getRevenueSummary = (user) => listHostRevenueSummary(user);
+export const getReservationNotifications = (user, afterId) => listReservationNotifications(user, afterId);
+
+async function sendEventNotification(reservation, template, user, statement = null) {
+  let sent = true;
+  let errorMessage = null;
+  try { await sendReservationEventEmail(reservation, template, statement); }
+  catch (error) { sent = false; errorMessage = error.message || 'Email delivery failed'; }
+  try { await logReservationEmailAttempt(reservation.id, template, reservation.guest_email, sent ? 'sent' : 'failed', errorMessage); }
+  catch (_error) { sent = false; }
+  return sent;
+}
+
+export async function confirmBooking(id, user) {
+  if (!['admin', 'receptionist'].includes(user.role)) throw new ApiError(403, 'Only admins and receptionists can confirm bookings');
+  let reservation = await confirmReservation(id, user);
+  const confirmationEmailSent = await sendEventNotification(reservation, 'reservation-confirmed', user);
+  reservation = await getReservationDetails(id, user);
+  return { reservation, confirmationEmailSent };
+}
+
+export async function completeCheckIn(id, remarks, user) {
+  if (!['admin', 'receptionist'].includes(user.role)) throw new ApiError(403, 'Only admins and receptionists can check in guests');
+  let reservation = await checkInReservation(id, remarks, user);
+  const notificationEmailSent = await sendEventNotification(reservation, 'check-in-confirmation', user);
+  reservation = await getReservationDetails(id, user);
+  return { reservation, notificationEmailSent };
+}
+
+export async function completeCheckOut(id, remarks, user) {
+  if (!['admin', 'receptionist'].includes(user.role)) throw new ApiError(403, 'Only admins and receptionists can check out guests');
+  const result = await checkOutReservation(id, remarks, user);
+  const notificationEmailSent = await sendEventNotification(result.reservation, 'check-out-confirmation', user, result.statement);
+  return { ...result, notificationEmailSent };
+}
 
 export async function changeReservationStatus(id, status, user) {
-  if (!['admin', 'host', 'receptionist'].includes(user.role)) throw new ApiError(403, 'You do not have permission to update reservations');
-  await updateReservation(id, { booking_status: status }, user);
+  if (!['admin', 'receptionist'].includes(user.role)) throw new ApiError(403, 'You do not have permission to update reservations');
+  return changeReservationState(id, status, user);
 }
+
+export const getReservation = (id, user) => getReservationDetails(id, user);
+export const getAssignableReservationVillas = (id, user) => getAssignableVillas(id, user);
 
 export async function inviteStaff(input) {
   const password = input.password || `${randomUUID().slice(0, 8)}A!`;
@@ -106,7 +151,28 @@ export async function getAccounts(role) {
 
 export async function assignReservation(id, villaId, user) {
   if (!['admin', 'receptionist'].includes(user.role)) throw new ApiError(403, 'Only Reception can assign a villa at check-in');
-  await assignReservationVilla(id, villaId);
+  return assignVillaToReservation(id, villaId, user);
+}
+
+export async function resendReservationEmail(id, template, user) {
+  if (!['admin', 'receptionist'].includes(user.role)) throw new ApiError(403, 'Only admins and receptionists can resend reservation emails');
+  const templates = {
+    confirmed: 'reservation-confirmed',
+    checkin: 'check-in-confirmation',
+    checkout: 'check-out-confirmation'
+  };
+  const selectedTemplate = templates[template];
+  if (!selectedTemplate) throw new ApiError(400, 'Unsupported reservation email type');
+  const reservation = await getReservationDetails(id, user);
+  const valid = template === 'confirmed'
+    ? ['confirmed', 'checked_in', 'checked_out'].includes(reservation.booking_status)
+    : template === 'checkin'
+      ? ['checked_in', 'checked_out'].includes(reservation.booking_status)
+      : reservation.booking_status === 'checked_out';
+  if (!valid) throw new ApiError(409, 'This email is not available for the current booking status');
+  const statement = template === 'checkout' ? await (await import('../repositories/billingRepository.js')).getReservationStatement(id, user) : null;
+  const emailSent = await sendEventNotification(reservation, selectedTemplate, user, statement);
+  return { reservation: await getReservationDetails(id, user), emailSent };
 }
 
 export async function uploadVillaMedia(id, files, user) {

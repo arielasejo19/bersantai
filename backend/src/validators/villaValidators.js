@@ -16,7 +16,9 @@ export const villaSchema = z.object({
 export const amenitySchema = z.object({ name: z.string().trim().min(2).max(120) });
 export const photoSchema = z.object({ url: z.string().url().max(1000), altText: optionalText(255), sortOrder: z.coerce.number().int().min(0).default(0) });
 export const staffInviteSchema = z.object({ email: z.string().email().max(255), displayName: z.string().trim().min(2).max(150), role: z.enum(['host', 'receptionist']), password: z.string().min(12).max(200).optional() });
-export const reservationStatusSchema = z.object({ status: z.enum(['pending', 'confirmed', 'checked_in', 'checked_out', 'cancelled']) });
+export const reservationStatusSchema = z.object({ status: z.enum(['cancelled', 'no_show', 'reopen']) });
+export const reservationRemarksSchema = z.object({ remarks: optionalText(1000).default('') });
+export const reservationAssignmentSchema = z.object({ villaId: z.coerce.number().int().positive() });
 export const bookingSchema = z.object({
   villaId: z.coerce.number().int().positive().nullable().optional(),
   villaTypeId: z.coerce.number().int().positive().nullable().optional(),
@@ -30,6 +32,7 @@ export const bookingSchema = z.object({
   verificationToken: z.preprocess((value) => value === '' ? undefined : value, z.string().uuid().optional()),
   guestName: z.string().trim().min(2).max(180),
   guestEmail: z.string().trim().email().max(255).transform((value) => value.toLowerCase()),
+  guestPhone: z.string().trim().min(5).max(32).regex(/^\+?[0-9().\s-]+$/, 'Enter a valid contact number'),
   guestNote: z.string().trim().max(1000).default(''),
   checkIn: z.coerce.date(),
   checkOut: z.preprocess((value) => value === '' ? undefined : value, z.coerce.date().optional()),

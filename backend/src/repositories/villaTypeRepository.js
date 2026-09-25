@@ -23,19 +23,49 @@ function toVillaType(row) {
   };
 }
 
+function toPricingRule(row) {
+  return {
+    id: String(row.id), name: row.name, stayType: row.stay_type || 'both', ruleType: row.rule_type,
+    startsOn: row.starts_on, endsOn: row.ends_on, price: Number(row.price || 0)
+  };
+}
+
 export async function listVillaTypes({ activeOnly = false } = {}) {
   const db = database();
   const query = db('villa_types').orderBy('name');
-  if (activeOnly) query.where({ 'is_active': true, 'status': 'active', 'availability_status': 'available' }).whereExists(
-    db('villas').select(1).whereRaw('villas.villa_type_id = villa_types.id').where({ status: 'active', availability_status: 'available' })
-  );
-  return (await query).map(toVillaType);
+  if (activeOnly) query.where({ 'is_active': true, 'status': 'active' });
+  const rows = await query;
+  return Promise.all(rows.map(async (row) => {
+    const [inventoryCount] = await db('villas').where({ villa_type_id: row.id, status: 'active' }).count({ count: '*' });
+    const [availableCount] = row.availability_status === 'available'
+      ? await db('villas').where({ villa_type_id: row.id, status: 'active', availability_status: 'available' }).count({ count: '*' })
+      : [{ count: 0 }];
+    const pricingRules = await db('villa_pricing_rules')
+      .join('villas', 'villas.id', 'villa_pricing_rules.villa_id')
+      .where('villas.villa_type_id', row.id)
+      .where('villa_pricing_rules.is_active', true)
+      .select('villa_pricing_rules.*')
+      .orderBy('villa_pricing_rules.rule_type');
+    return {
+      ...toVillaType(row),
+      pricingRules: pricingRules.map(toPricingRule),
+      inventoryUnits: Number(inventoryCount?.count || 0),
+      availableUnits: Number(availableCount?.count || 0)
+    };
+  }));
 }
 
 export async function findVillaType(id) {
-  const row = await database()('villa_types').where({ id }).first();
+  const db = database();
+  const row = await db('villa_types').where({ id }).first();
   if (!row) throw new ApiError(404, 'Villa type not found');
-  return toVillaType(row);
+  const pricingRules = await db('villa_pricing_rules')
+    .join('villas', 'villas.id', 'villa_pricing_rules.villa_id')
+    .where('villas.villa_type_id', id)
+    .where('villa_pricing_rules.is_active', true)
+    .select('villa_pricing_rules.*')
+    .orderBy('villa_pricing_rules.rule_type');
+  return { ...toVillaType(row), pricingRules: pricingRules.map(toPricingRule) };
 }
 
 export async function createVillaType(input) {

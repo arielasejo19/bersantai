@@ -1,5 +1,5 @@
-import { addVillaAmenity, addVillaPhoto, archiveManagedVilla, assignReservation, assignVillaReceptionist, bookVilla, changeReservationStatus, createManagedVilla, editVilla, getAccounts, getCalendarVillas, getPublicAvailability, getPublicAvailabilityCalendar, getPublicVilla, getPublicVillas, getReservations, getVilla, getVillaReservations, getVillas, inviteStaff, setVillaMapPosition, uploadVillaMedia } from '../services/villaService.js';
-import { amenitySchema, bookingSchema, photoSchema, reservationStatusSchema, staffInviteSchema, villaSchema } from '../validators/villaValidators.js';
+import { addVillaAmenity, addVillaPhoto, archiveManagedVilla, assignReservation, assignVillaReceptionist, bookVilla, changeReservationStatus, completeCheckIn, completeCheckOut, confirmBooking, createManagedVilla, editVilla, getAccounts, getAssignableReservationVillas, getCalendarVillas, getPublicAvailability, getPublicAvailabilityCalendar, getPublicVilla, getPublicVillas, getReservation, getReservationNotifications, getReservations, getRevenueSummary, getVilla, getVillaReservations, getVillas, inviteStaff, resendReservationEmail, setVillaMapPosition, uploadVillaMedia } from '../services/villaService.js';
+import { amenitySchema, bookingSchema, photoSchema, reservationAssignmentSchema, reservationRemarksSchema, reservationStatusSchema, staffInviteSchema, villaSchema } from '../validators/villaValidators.js';
 import { validateBody } from '../validators/validate.js';
 import { z } from 'zod';
 import { getPricingEstimate } from '../services/villaService.js';
@@ -23,7 +23,15 @@ export async function uploadMedia(request, response) { response.status(201).json
 export async function assignReceptionist(request, response) { await assignVillaReceptionist(request.params.villaId, request.body.userId, request.user); response.status(204).send(); }
 export async function listReservations(request, response) { response.json({ reservations: await getVillaReservations(request.params.villaId, request.user) }); }
 export async function listAllReservations(request, response) { response.json({ reservations: await getReservations(request.user) }); }
+export async function listRevenueSummary(request, response) { response.json({ summary: await getRevenueSummary(request.user) }); }
+export async function listReservationNotifications(request, response) { response.json(await getReservationNotifications(request.user, request.query.afterId)); }
 export async function updateReservationStatus(request, response) { await changeReservationStatus(request.params.reservationId, validateBody(reservationStatusSchema, request.body).status, request.user); response.status(204).send(); }
-export async function assignReservationVilla(request, response) { await assignReservation(request.params.reservationId, request.body.villaId, request.user); response.status(204).send(); }
+export async function showReservation(request, response) { response.json({ reservation: await getReservation(request.params.reservationId, request.user) }); }
+export async function listAssignableReservationVillas(request, response) { response.json({ villas: await getAssignableReservationVillas(request.params.reservationId, request.user) }); }
+export async function confirmReservationBooking(request, response) { response.json(await confirmBooking(request.params.reservationId, request.user)); }
+export async function checkInReservation(request, response) { response.json(await completeCheckIn(request.params.reservationId, validateBody(reservationRemarksSchema, request.body || {}).remarks, request.user)); }
+export async function checkOutReservation(request, response) { response.json(await completeCheckOut(request.params.reservationId, validateBody(reservationRemarksSchema, request.body || {}).remarks, request.user)); }
+export async function assignReservationVilla(request, response) { response.json({ reservation: await assignReservation(request.params.reservationId, validateBody(reservationAssignmentSchema, request.body).villaId, request.user) }); }
+export async function resendReservationNotification(request, response) { response.json(await resendReservationEmail(request.params.reservationId, request.params.emailType, request.user)); }
 export async function inviteStaffMember(request, response) { response.status(201).json(await inviteStaff(validateBody(staffInviteSchema, request.body))); }
 export async function listAccounts(request, response) { response.json({ accounts: await getAccounts(request.query.role) }); }

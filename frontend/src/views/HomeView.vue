@@ -55,33 +55,34 @@ function toCard(villa) {
 
 onMounted(async () => {
   try {
-    const result = await villaService.listPublic();
-    if (result.villas.length) {
-      const cards = result.villas.map(toCard);
-      diningVillas.value = cards.filter((villa) => villa.villaType?.slug === 'dining-pavilion' || villa.name.toLowerCase().includes('dining pavilion'));
-      villas.value = cards.filter((villa) => !diningVillas.value.some((diningVilla) => diningVilla.id === villa.id));
-    }
-  } catch (_error) {
-    // Keep the curated landing cards available when the API is offline.
-  }
-
-  try {
     const config = (await villaService.getPublicConfig()).config;
     operatingMode.value = config.operatingMode;
     Object.assign(publicSite, config.publicSite || {});
-    const typeResult = await villaService.listPublicTypes();
-    villaTypes.value = typeResult.villaTypes;
+    const publicVillasResult = await villaService.listPublic().catch(() => null);
+    const publicCards = publicVillasResult?.villas?.map(toCard) || [];
+    diningVillas.value = publicCards.filter((villa) => villa.villaType?.slug === 'dining-pavilion' || villa.name.toLowerCase().includes('dining pavilion'));
     if (operatingMode.value === 'hotel') {
-      const grouped = villaTypes.value.map((type) => {
-        const typeVillas = villas.value.filter((villa) => villa.villaType?.id === type.id);
-        const representative = typeVillas[0];
-        if (!representative) return null;
-        return { ...representative, id: representative.id, name: type.name, location: 'Villa Type', detail: `${typeVillas.length} rooms · up to ${Math.max(...typeVillas.map((villa) => villa.capacity))} guests`, villaTypeId: type.id };
-      }).filter(Boolean);
-      if (grouped.length) villas.value = grouped;
+      const typeResult = await villaService.listPublicTypes();
+      villaTypes.value = typeResult.villaTypes;
+      villas.value = villaTypes.value.map((type) => ({
+        name: type.name,
+        location: publicSite.location,
+        detail: `${type.inventoryUnits} ${type.inventoryUnits === 1 ? 'unit' : 'units'} in inventory · up to ${type.capacity} guests`,
+        price: formatCurrency(type.nightlyPrice),
+        image: type.defaultImageUrl || type.galleryUrls?.[0] || '',
+        mediaType: type.defaultMediaType || 'image',
+        amenities: type.amenities || [],
+        id: type.id,
+        villaTypeId: type.id,
+        villaType: type
+      }));
+    } else {
+      if (publicCards.length) {
+        villas.value = publicCards.filter((villa) => !diningVillas.value.some((diningVilla) => diningVilla.id === villa.id));
+      }
     }
   } catch (_error) {
-    // Keep Airbnb cards available when public configuration is offline.
+    if (operatingMode.value === 'hotel') villas.value = [];
   }
 
   try {
@@ -133,8 +134,10 @@ function openBooking(villa = villas.value[0]) {
 
 async function logout() {
   accountMenuOpen.value = false;
+  const role = String(authStore.user?.role || '').toLowerCase();
+  const destination = ['admin', 'host', 'receptionist'].includes(role) ? { name: 'host-login' } : { name: 'login' };
   await authStore.logout();
-  await router.push('/');
+  await router.push(destination);
 }
 
 async function submitBooking() {
@@ -182,7 +185,7 @@ const baliFacilities = [
       <a class="scroll-cue" href="#villas"><span>Scroll to explore</span><b aria-hidden="true">↓</b></a>
     </section>
     <DiningPavilionSection :dining-villas="diningVillas" @book="openBooking" />
-    <section class="villa-section section-pad" id="villas" data-reveal><div class="section-heading"><div><p class="eyebrow">Mountain villas in Bali</p><h2>Stays worth<br><em>climbing for.</em></h2></div><a class="text-link desktop-only" href="#villas">View all villas <span aria-hidden="true">↗</span></a></div><div class="villa-grid"><VillaCard v-for="villa in villas" :key="villa.name" :villa="villa" @explore="router.push({ name: 'villa-detail', params: { villaId: villa.id } })" @book="openBooking(villa)" /></div></section>
+    <section class="villa-section section-pad" id="villas" data-reveal><div class="section-heading"><div><p class="eyebrow">{{ operatingMode === 'hotel' ? 'Villa types in Bali' : 'Mountain villas in Bali' }}</p><h2>Stays worth<br><em>climbing for.</em></h2></div><a class="text-link desktop-only" href="#villas">View all {{ operatingMode === 'hotel' ? 'villa types' : 'villas' }} <span aria-hidden="true">↗</span></a></div><div v-if="villas.length" class="villa-grid"><VillaCard v-for="villa in villas" :key="villa.name" :villa="villa" @explore="router.push({ name: 'villa-detail', params: { villaId: villa.id } })" @book="openBooking(villa)" /></div><p v-else class="section-empty">Stays are being prepared. Please check back soon.</p></section>
 
     <section class="services-section section-pad" id="services" data-reveal><div class="section-heading"><div><p class="eyebrow">Made for your stay</p><h2>Mountain services,<br><em>beautifully handled.</em></h2></div><p class="section-aside">Thoughtful extras, arranged<br>around your rhythm.</p></div><div v-if="services.length" class="service-grid"><article v-for="service in services" :key="service.id" class="service-card"><PhotoLightbox v-if="service.imageUrl" :src="service.imageUrl" :alt="service.title" /><div><h3>{{ service.title }}</h3><p>{{ service.description }}</p><button class="service-book" type="button" @click="openBooking()">Add to your stay <span aria-hidden="true">↗</span></button></div></article></div><p v-else class="section-empty">Our stay services are being prepared.</p></section>
 
@@ -190,7 +193,7 @@ const baliFacilities = [
 
     <section v-if="packages.length" class="packages-section section-pad" id="packages" data-reveal><div class="section-heading"><div><p class="eyebrow">Stay and savour</p><h2>Packages made<br><em>for slowing down.</em></h2></div><p class="section-aside">One beautiful stay,<br>thoughtfully bundled.</p></div><div class="package-grid"><article v-for="item in packages" :key="item.id" class="package-card"><PhotoLightbox v-if="item.imageUrl" :src="item.imageUrl" :alt="item.name" /><div class="package-card-body"><p class="eyebrow">{{ item.discountPercent ? `${item.discountPercent}% saved` : 'Bersantai offer' }}</p><h3>{{ item.name }}</h3><p>{{ item.description }}</p><div class="package-includes"><span><strong>Villas</strong> {{ item.villas.map((villa) => villa.name).join(', ') }}</span><span><strong>Food</strong> {{ item.menuItems.map((food) => `${food.quantity > 1 ? `${food.quantity}× ` : ''}${food.name}`).join(', ') }}</span></div><div class="package-price"><span><strong>{{ formatCurrency(item.price) }}</strong><del v-if="item.originalPrice > item.price">{{ formatCurrency(item.originalPrice) }}</del></span><RouterLink class="service-book" to="/register">Book / inquire <span aria-hidden="true">↗</span></RouterLink></div></div></article></div></section>
 
-    <section class="facilities section-pad" data-reveal><div class="section-heading"><div><p class="eyebrow">Everything in its place</p><h2>Little luxuries,<br><em>naturally.</em></h2></div><p class="section-aside">The details that make<br>a stay feel effortless.</p></div><div class="facility-grid"><article v-for="facility in baliFacilities" :key="facility.title" class="facility-item"><span>{{ facility.icon }}</span><h3>{{ facility.title }}</h3><p>{{ facility.text }}</p></article></div></section>
+    <!-- <section class="facilities section-pad" data-reveal><div class="section-heading"><div><p class="eyebrow">Everything in its place</p><h2>Little luxuries,<br><em>naturally.</em></h2></div><p class="section-aside">The details that make<br>a stay feel effortless.</p></div><div class="facility-grid"><article v-for="facility in baliFacilities" :key="facility.title" class="facility-item"><span>{{ facility.icon }}</span><h3>{{ facility.title }}</h3><p>{{ facility.text }}</p></article></div></section> -->
 
     <section class="experience" id="how-it-works" data-reveal><div class="experience-inner"><div class="experience-heading"><p class="eyebrow eyebrow-light">Why Bersantai</p><h2>Make space<br>for <em>what matters.</em></h2></div><div class="experience-list"><article v-for="experience in experiences" :key="experience.number" class="experience-item"><span>{{ experience.number }}</span><div><h3>{{ experience.title }}</h3><p>{{ experience.text }}</p></div></article></div></div></section>
 

@@ -16,6 +16,14 @@ export const villaService = {
   uploadMedia(id, formData) { return apiClient.post(`/villas/${id}/media`, formData); },
   reservations(id) { return apiClient.get(`/villas/${id}/reservations`); },
   allReservations() { return apiClient.get('/villas/reservations'); },
+  notifications(afterId) { const query = afterId == null ? '' : `?${new URLSearchParams({ afterId: String(afterId) })}`; return apiClient.get(`/villas/notifications${query}`); },
+  reservation(id) { return apiClient.get(`/villas/reservations/${id}`); },
+  assignableVillas(id) { return apiClient.get(`/villas/reservations/${id}/assignable-villas`); },
+  confirmReservation(id) { return apiClient.post(`/villas/reservations/${id}/confirm`, {}); },
+  checkInReservation(id, payload) { return apiClient.post(`/villas/reservations/${id}/check-in`, payload); },
+  checkOutReservation(id, payload) { return apiClient.post(`/villas/reservations/${id}/check-out`, payload); },
+  resendReservationEmail(id, type) { return apiClient.post(`/villas/reservations/${id}/emails/${type}/resend`, {}); },
+  changeReservationState(id, status) { return apiClient.post(`/villas/reservations/${id}/state`, { status }); },
   listCalendarVillas() { return apiClient.get('/villas/calendar'); },
   reservationStatement(id) { return apiClient.get(`/villas/reservations/${id}/statement`); },
   addReservationCharge(id, payload) { return apiClient.post(`/villas/reservations/${id}/charges`, payload); },
@@ -28,6 +36,7 @@ export const villaService = {
   ,getConfig() { return apiClient.get('/villas/config'); }
   ,updateConfig(payload) { return apiClient.request('/villas/config', { method: 'PATCH', body: payload }); }
   ,uploadPublicMap(formData) { return apiClient.post('/villas/config/public-map', formData); }
+  ,revenueSummary() { return apiClient.get('/villas/revenue'); }
   ,updateMapPosition(id, payload) { return apiClient.request(`/villas/${id}/map-position`, { method: 'PATCH', body: payload }); }
   ,listTypes() { return apiClient.get('/villa-types'); }
   ,createType(payload) { return apiClient.post('/villa-types', payload); }

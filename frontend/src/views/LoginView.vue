@@ -1,5 +1,5 @@
 <script setup>
-import { reactive, ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
 import { useRoute, useRouter, RouterLink } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { useAuthStore } from '@/stores/authStore';
@@ -8,8 +8,14 @@ const router = useRouter();
 const route = useRoute();
 const authStore = useAuthStore();
 const { loading, error } = storeToRefs(authStore);
-const isHostLogin = route.name === 'host-login';
+const isHostLogin = computed(() => route.name === 'host-login');
 const socialProvider = ref('');
+
+function chooseLoginMode(mode) {
+  const target = mode === 'host' ? '/host/login' : '/login';
+  const query = { ...route.query };
+  router.push({ path: target, query });
+}
 
 const form = reactive({
   email: '',
@@ -47,6 +53,7 @@ async function submit() {
       <p class="eyebrow">{{ isHostLogin ? 'Bersantai partner portal' : 'Bersantai guest portal' }}</p>
       <h1 id="login-title">{{ isHostLogin ? 'Host login' : 'Guest login' }}</h1>
       <p v-if="isHostLogin" class="login-intro">Manage your villa, availability, and guest stays from one calm workspace.</p>
+      <p v-else class="login-intro">Access your account and manage your stays with ease.</p>
 
       <form class="form-stack" @submit.prevent="submit">
         <label>
@@ -61,12 +68,17 @@ async function submit() {
 
         <p v-if="error" class="error" role="alert">{{ error }}</p>
 
-        <button class="primary-button" :class="{ 'host-login-button': isHostLogin }" type="submit" :disabled="loading">
+        <button class="primary-button" :class="{ 'host-login-button': isHostLogin, 'guest-login-button': !isHostLogin }" type="submit" :disabled="loading">
           {{ loading ? 'Logging in...' : 'Log in' }}
         </button>
       </form>
 
       <div class="social-login"><span>Or continue with</span><div><button class="secondary-button social-button" type="button" :disabled="loading" @click="socialLogin('google')"><span class="provider-icon provider-google" aria-hidden="true">G</span>{{ socialProvider === 'google' ? 'Connecting...' : 'Login with Google' }}</button><button class="secondary-button social-button" type="button" :disabled="loading" @click="socialLogin('facebook')"><span class="provider-icon provider-facebook" aria-hidden="true">f</span>{{ socialProvider === 'facebook' ? 'Connecting...' : 'Login with Facebook' }}</button></div></div>
+
+      <div class="auth-role-switch" role="tablist" aria-label="Choose login portal">
+        <button type="button" :class="{ active: !isHostLogin }" :aria-selected="!isHostLogin" @click="chooseLoginMode('guest')">Guest portal</button>
+        <button type="button" :class="{ active: isHostLogin }" :aria-selected="isHostLogin" @click="chooseLoginMode('host')">Host portal</button>
+      </div>
 
       <p class="form-footer">
         New to Bersantai?

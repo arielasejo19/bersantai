@@ -5,6 +5,12 @@ import { ApiError } from '../utils/apiError.js';
 
 function database() { const db = getDatabase(); if (!db) throw new ApiError(503, 'Database is not configured'); return db; }
 
+export const BOOKING_VERIFICATION_TTL_SECONDS = 5 * 60;
+
+export function bookingVerificationExpiry(now = Date.now()) {
+  return new Date(now + BOOKING_VERIFICATION_TTL_SECONDS * 1000);
+}
+
 export async function createChallenge(email) {
   const db = database();
   const since = new Date(Date.now() - 15 * 60 * 1000);
@@ -13,7 +19,7 @@ export async function createChallenge(email) {
   await db('email_verification_challenges').where({ email }).update({ expires_at: new Date() });
   const code = String(crypto.randomInt(100000, 1000000));
   const challengeId = crypto.randomUUID();
-  await db('email_verification_challenges').insert({ email, code_hash: await bcrypt.hash(code, 10), verification_token: challengeId, expires_at: new Date(Date.now() + 10 * 60 * 1000) });
+  await db('email_verification_challenges').insert({ email, code_hash: await bcrypt.hash(code, 10), verification_token: challengeId, expires_at: bookingVerificationExpiry() });
   return { challengeId, code };
 }
 

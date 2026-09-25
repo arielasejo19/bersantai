@@ -38,8 +38,10 @@ async function saveProfile() {
 }
 
 async function logout() {
+  const role = String(authStore.user?.role || '').toLowerCase();
+  const destination = ['admin', 'host', 'receptionist'].includes(role) ? { name: 'host-login' } : { name: 'login' };
   await authStore.logout();
-  await router.push('/login');
+  await router.push(destination);
 }
 </script>
 

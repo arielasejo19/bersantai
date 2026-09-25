@@ -12,6 +12,7 @@ import PackageManagement from '@/components/PackageManagement.vue';
 import MediaUploadField from '@/components/MediaUploadField.vue';
 import ReservationWorkspace from '@/components/ReservationWorkspace.vue';
 import PricingRulesManagement from '@/components/PricingRulesManagement.vue';
+import NotificationCenter from '@/components/NotificationCenter.vue';
 
 const authStore = useAuthStore();
 const route = useRoute();
@@ -21,9 +22,10 @@ const villas = ref([]);
 const calendarVillas = ref([]);
 const reservations = ref([]);
 const allReservations = ref([]);
+const revenueSummary = ref({ grossRevenue: 0, netHostRevenue: 0, collectedRevenue: 0, outstandingBalance: 0, totalBookings: 0, byVilla: [] });
 const selectedVilla = ref(null);
 const search = ref('');
-const managementViews = ['properties', 'map', 'reservations', 'pricing', 'villa-types', 'services', 'menus', 'packages', 'accounts', 'settings'];
+const managementViews = ['properties', 'map', 'reservations', 'revenue', 'pricing', 'villa-types', 'services', 'menus', 'packages', 'accounts', 'settings'];
 const viewFromRoute = () => managementViews.includes(String(route.query.section)) ? String(route.query.section) : 'properties';
 const activeView = ref(viewFromRoute());
 const loading = ref(true);
@@ -161,6 +163,9 @@ async function selectVilla(villa) {
 async function loadAllReservations() {
   try { allReservations.value = (await villaService.allReservations()).reservations; } catch (requestError) { error.value = requestError.message; }
 }
+async function loadRevenueSummary() {
+  try { revenueSummary.value = (await villaService.revenueSummary()).summary; } catch (requestError) { error.value = requestError.message; }
+}
 async function loadCalendarVillas() {
   try { calendarVillas.value = (await villaService.listCalendarVillas()).villas; } catch (requestError) { error.value = requestError.message; }
 }
@@ -240,22 +245,16 @@ async function changeVillaType(villa, typeId) {
   } catch (requestError) { error.value = requestError.message; }
 }
 
-async function updateStatus(reservation, status) {
-  try { await villaService.updateReservation(selectedVilla.value.id, reservation.id, status); await selectVilla(selectedVilla.value); } catch (requestError) { error.value = requestError.message; }
-}
-
-async function assignIncomingReservation(reservation, villaId) {
-  try { await villaService.assignReservation(reservation.id, villaId); await loadAllReservations(); } catch (requestError) { error.value = requestError.message; }
-}
-
 function openProfile() {
   Object.assign(profileForm, { displayName: user.value?.displayName || '', bio: user.value?.bio || '', avatarUrl: user.value?.avatarUrl || '' });
   showProfile.value = true;
 }
 
 async function logout() {
+  const role = String(authStore.user?.role || '').toLowerCase();
+  const destination = ['admin', 'host', 'receptionist'].includes(role) ? { name: 'host-login' } : { name: 'login' };
   await authStore.logout();
-  await router.push({ name: 'login' });
+  await router.push(destination);
 }
 
 async function saveProfile() {
@@ -320,7 +319,7 @@ async function uploadPublicMap(file) {
   try { const data = new FormData(); data.append('media', file); const result = await villaService.uploadPublicMap(data); Object.assign(publicSite, result.config.publicSite || {}); } catch (requestError) { error.value = requestError.message; } finally { mapUploading.value = false; }
 }
 
-onMounted(() => { loadVillas(); loadMode(); loadAllReservations(); loadCalendarVillas(); if (isAdmin.value) { loadServices(); loadVillaTypes(); } });
+onMounted(() => { loadVillas(); loadMode(); loadAllReservations(); loadRevenueSummary(); loadCalendarVillas(); if (isAdmin.value) { loadServices(); loadVillaTypes(); } });
 </script>
 
 <template>
@@ -329,12 +328,12 @@ onMounted(() => { loadVillas(); loadMode(); loadAllReservations(); loadCalendarV
       <div class="management-sidebar-nature" aria-hidden="true"><span class="host-leaf host-leaf-one"></span><span class="host-leaf host-leaf-two"></span><span class="host-leaf host-leaf-three"></span><span class="host-light host-light-one"></span><span class="thai-ornament thai-ornament-bottom"></span></div>
       <RouterLink class="dashboard-brand" to="/" aria-label="Back to Bersantai home"><img :src="'/icons/' + 'bersantai-logo.png'" alt="Bersantai Bali Private Resort"></RouterLink>
       <div class="sidebar-profile"><span class="avatar">{{ (user?.displayName || user?.email || 'B').charAt(0).toUpperCase() }}</span><div><strong>{{ user?.displayName || 'Partner' }}</strong><small>{{ user?.role }}</small></div></div>
-      <nav class="dashboard-nav" aria-label="Management navigation"><button :class="{ active: activeView === 'properties' }" type="button" @click="activeView = 'properties'"><span>⌂</span> {{ propertyLabel }}</button><button v-if="isAdmin" :class="{ active: activeView === 'map' }" type="button" @click="activeView = 'map'"><span>⌖</span> Vicinity map</button><button :class="{ active: activeView === 'reservations' }" type="button" @click="activeView = 'reservations'"><span>▦</span> Reservations</button><button v-if="canEdit" :class="{ active: activeView === 'pricing' }" type="button" @click="activeView = 'pricing'"><span>₱</span> Flexible pricing</button><button v-if="isAdmin" :class="{ active: activeView === 'villa-types' }" type="button" @click="activeView = 'villa-types'"><span>▤</span> Villa Types</button><button v-if="isAdmin" :class="{ active: activeView === 'services' }" type="button" @click="activeView = 'services'"><span>✦</span> Services</button><button v-if="isAdmin" :class="{ active: activeView === 'menus' }" type="button" @click="activeView = 'menus'"><span>◈</span> Menus / Foods</button><button v-if="isAdmin" :class="{ active: activeView === 'packages' }" type="button" @click="activeView = 'packages'"><span>◇</span> Packages / Bundles</button><button v-if="isAdmin" :class="{ active: activeView === 'accounts' }" type="button" @click="openAccounts"><span>♙</span> Accounts</button><button v-if="isAdmin" :class="{ active: activeView === 'settings' }" type="button" @click="activeView = 'settings'"><span>⚙</span> Configuration</button></nav>
+      <nav class="dashboard-nav" aria-label="Management navigation"><button :class="{ active: activeView === 'properties' }" type="button" @click="activeView = 'properties'"><span>⌂</span> {{ propertyLabel }}</button><button v-if="isAdmin" :class="{ active: activeView === 'map' }" type="button" @click="activeView = 'map'"><span>⌖</span> Vicinity map</button><button :class="{ active: activeView === 'reservations' }" type="button" @click="activeView = 'reservations'"><span>▦</span> Reservations</button><button v-if="canEdit" :class="{ active: activeView === 'revenue' }" type="button" @click="activeView = 'revenue'"><span>▣</span> Revenue</button><button v-if="canEdit" :class="{ active: activeView === 'pricing' }" type="button" @click="activeView = 'pricing'"><span>₱</span> Flexible pricing</button><button v-if="isAdmin" :class="{ active: activeView === 'villa-types' }" type="button" @click="activeView = 'villa-types'"><span>▤</span> Villa Types</button><button v-if="isAdmin" :class="{ active: activeView === 'services' }" type="button" @click="activeView = 'services'"><span>✦</span> Services</button><button v-if="isAdmin" :class="{ active: activeView === 'menus' }" type="button" @click="activeView = 'menus'"><span>◈</span> Menus / Foods</button><button v-if="isAdmin" :class="{ active: activeView === 'packages' }" type="button" @click="activeView = 'packages'"><span>◇</span> Packages / Bundles</button><button v-if="isAdmin" :class="{ active: activeView === 'accounts' }" type="button" @click="openAccounts"><span>♙</span> Accounts</button><button v-if="isAdmin" :class="{ active: activeView === 'settings' }" type="button" @click="activeView = 'settings'"><span>⚙</span> Configuration</button></nav>
       <div class="sidebar-bottom"><button type="button" @click="openProfile">Account settings</button><RouterLink to="/">View public site</RouterLink><button type="button" @click="logout">Log out</button></div>
     </aside>
 
     <section class="dashboard-main">
-      <header class="dashboard-topbar"><div><p class="eyebrow">{{ user?.role }} workspace</p><h1>{{ activeView === 'properties' ? 'Good morning, ' : '' }}{{ user?.displayName || 'Partner' }}</h1></div><div class="topbar-actions"><button class="notification-button" type="button" aria-label="Notifications">♧<i></i></button><button class="topbar-avatar" type="button" aria-label="Open profile" @click="openProfile">{{ (user?.displayName || 'B').charAt(0).toUpperCase() }}</button></div></header>
+      <header class="dashboard-topbar"><div><p class="eyebrow">{{ user?.role }} workspace</p><h1>{{ activeView === 'properties' ? 'Good morning, ' : '' }}{{ user?.displayName || 'Partner' }}</h1></div><div class="topbar-actions"><NotificationCenter /><button class="topbar-avatar" type="button" aria-label="Open profile" @click="openProfile">{{ (user?.displayName || 'B').charAt(0).toUpperCase() }}</button></div></header>
       <p v-if="error" class="management-error" role="alert">{{ error }}</p>
       <MediaUploadField v-if="activeView === 'villa-types'" :url="villaTypeForm.defaultImageUrl" :media-type="villaTypeForm.defaultMediaType" label="Villa type photo or video" @select="villaTypeMediaFile = $event" />
       <MediaUploadField v-if="activeView === 'services'" :url="serviceForm.imageUrl" :media-type="serviceForm.mediaType" label="Service photo or video" @select="serviceMediaFile = $event" />
@@ -342,7 +341,60 @@ onMounted(() => { loadVillas(); loadMode(); loadAllReservations(); loadCalendarV
       <MenuManagement v-if="activeView === 'menus'" />
       <PackageManagement v-if="activeView === 'packages'" />
       <PricingRulesManagement v-if="activeView === 'pricing'" />
-      <ReservationWorkspace v-if="activeView === 'reservations'" :reservations="allReservations" :villas="calendarVillas" @refresh="loadAllReservations" />
+      <ReservationWorkspace v-if="activeView === 'reservations'" :reservations="allReservations" :villas="calendarVillas" />
+      <template v-else-if="activeView === 'revenue'">
+        <div class="revenue-shell">
+          <div class="dashboard-toolbar revenue-toolbar"><div><p class="eyebrow">Performance</p><h2>Revenue overview</h2></div><span class="revenue-summary-badge">{{ revenueSummary.totalBookings || 0 }} bookings</span></div>
+          <div class="revenue-hero">
+            <article class="revenue-hero-card revenue-hero-highlight">
+              <span>Net host income</span>
+              <strong>{{ formatCurrency(revenueSummary.netHostRevenue || 0) }}</strong>
+              <small>Stay revenue only · food and services excluded</small>
+            </article>
+            <article class="revenue-hero-card"><span>Gross booking value</span><strong>{{ formatCurrency(revenueSummary.grossRevenue || 0) }}</strong><small>All reservation charges</small></article>
+            <article class="revenue-hero-card"><span>Collected</span><strong>{{ formatCurrency(revenueSummary.collectedRevenue || 0) }}</strong><small>Payments received</small></article>
+            <article class="revenue-hero-card"><span>Outstanding</span><strong>{{ formatCurrency(revenueSummary.outstandingBalance || 0) }}</strong><small>Remaining receivables</small></article>
+          </div>
+
+          <section class="revenue-panel">
+            <div class="account-toolbar"><div><h3>Revenue by property</h3><span>{{ revenueSummary.totalBookings || 0 }} bookings</span></div></div>
+            <div v-if="!revenueSummary.byVilla.length" class="empty-state">No revenue records yet.</div>
+            <article v-for="villaRevenue in revenueSummary.byVilla" :key="villaRevenue.villaName" class="revenue-property-card">
+              <div class="revenue-property-header">
+                <div>
+                  <strong>{{ villaRevenue.villaName }}</strong>
+                  <small>{{ villaRevenue.bookings || 0 }} bookings</small>
+                </div>
+                <div class="revenue-property-totals">
+                  <span>Net <strong>{{ formatCurrency(villaRevenue.netHostRevenue || 0) }}</strong></span>
+                  <span>Gross <strong>{{ formatCurrency(villaRevenue.grossRevenue || 0) }}</strong></span>
+                </div>
+              </div>
+              <div class="revenue-property-metrics">
+                <span>Collected {{ formatCurrency(villaRevenue.collectedRevenue || 0) }}</span>
+                <span>Outstanding {{ formatCurrency(villaRevenue.outstandingBalance || 0) }}</span>
+              </div>
+              <div class="revenue-booking-list">
+                <div v-for="booking in villaRevenue.bookingDetails || []" :key="booking.id || booking.referenceNumber" class="revenue-booking-row">
+                  <div class="revenue-booking-guest">
+                    <strong>{{ booking.guestName || 'Guest' }}</strong>
+                    <small>{{ booking.referenceNumber || booking.id }}</small>
+                  </div>
+                  <div class="revenue-booking-meta">
+                    <span>{{ booking.checkIn || '—' }} → {{ booking.checkOut || '—' }}</span>
+                    <small>{{ booking.bookingStatus || 'pending' }}</small>
+                  </div>
+                  <div class="revenue-booking-amounts">
+                    <strong>{{ formatCurrency(booking.netHostRevenue || 0) }}</strong>
+                    <small>{{ formatCurrency(booking.totalAmount || 0) }} total</small>
+                  </div>
+                </div>
+                <p v-if="!(villaRevenue.bookingDetails || []).length" class="empty-state">No bookings recorded for this property.</p>
+              </div>
+            </article>
+          </section>
+        </div>
+      </template>
       <label v-if="activeView === 'properties' && isAdmin && selectedVilla" class="villa-type-quick-edit">Villa Type<select :value="selectedVilla.villaType?.id || ''" @change="changeVillaType(selectedVilla, $event.target.value)"><option value="">Unassigned</option><option v-for="villaType in villaTypes" :key="villaType.id" :value="villaType.id">{{ villaType.name }}</option></select></label>
       <template v-if="activeView === 'properties'">
         <div class="metric-grid"><article v-for="metric in metrics" :key="metric.label" class="metric-card"><span>{{ metric.label }}</span><strong>{{ metric.value }}</strong><small>{{ metric.detail }}</small></article></div>
@@ -350,9 +402,6 @@ onMounted(() => { loadVillas(); loadMode(); loadAllReservations(); loadCalendarV
         <div v-if="loading" class="empty-state">Loading your properties...</div><div v-else-if="!filteredVillas.length" class="empty-state"><strong>No properties found</strong><span>{{ search ? 'Try a different search.' : 'Your assigned properties will appear here.' }}</span></div><div v-else class="property-grid"><article v-for="villa in filteredVillas" :key="villa.id" class="property-card" :class="{ selected: selectedVilla?.id === villa.id }" @click="selectVilla(villa)"><div class="property-photo"><video v-if="villa.photos?.[0]?.mediaType === 'video'" :src="resolveMediaUrl(villa.photos[0].url)" muted preload="metadata" :aria-label="`${villa.name} video`"></video><img v-else-if="villa.photos?.[0]?.url" :src="resolveMediaUrl(villa.photos[0].url)" :alt="villa.name" loading="lazy"><div v-else class="property-photo-empty">No media</div><span :class="`availability-pill ${villa.availabilityStatus}`">{{ villa.availabilityStatus }}</span><button v-if="canEdit" class="card-edit" type="button" aria-label="Edit property" @click.stop="openEdit(villa)">⋯</button><button v-if="canEdit && villa.status !== 'inactive'" class="card-archive" type="button" aria-label="Archive property" @click.stop="archiveProperty(villa)">×</button></div><div class="property-info"><div><h3>{{ villa.name }}</h3><p>{{ villa.location }}</p></div><strong>{{ formatCurrency(villa.nightlyPrice) }}<small> / night</small></strong></div><div class="property-meta"><span>{{ villa.capacity }} guests</span><span>{{ villa.bedroomCount }} bedrooms</span><span>{{ villa.status }}</span><span>Host: {{ villa.owner?.displayName || villa.owner?.email || 'Unassigned' }}</span></div></article></div>
       </template>
       <template v-else-if="activeView === 'map'"><section class="vicinity-map-panel"><div class="dashboard-toolbar"><div><span class="eyebrow">Property locations</span><h2>Vicinity map</h2><p>Choose a property, then click the map to place its marker.</p></div><label class="vicinity-villa-select">Selected property<select :value="selectedVilla?.id || ''" @change="selectVilla(villas.find((villa) => villa.id === Number($event.target.value)))"><option value="" disabled>Select a property</option><option v-for="villa in villas" :key="villa.id" :value="villa.id">{{ villa.name }}</option></select></label></div><div class="vicinity-map" @click="placeVillaOnMap"><img v-if="publicSite.mapUrl" :src="resolveMediaUrl(publicSite.mapUrl)" alt="Bersantai vicinity map"><div v-else class="empty-state"><strong>No vicinity map uploaded</strong><span>Upload one in Configuration to place your properties on it.</span></div><span v-for="(villa, index) in villas" :key="villa.id" class="vicinity-map-marker-group" :style="{ left: `${mapPosition(villa, index).x}%`, top: `${mapPosition(villa, index).y}%` }"><button class="vicinity-map-marker" :class="{ selected: selectedVilla?.id === villa.id }" type="button" :aria-label="`Select ${villa.name}`" @click.stop="selectVilla(villa)">{{ index + 1 }}</button><span class="vicinity-map-marker-label">{{ villa.name }}</span></span></div><p class="vicinity-map-status">{{ selectedVilla ? `${selectedVilla.name} is selected. Click the map to move its marker.` : 'Select a property to place its marker.' }}</p></section></template>
-      <template v-else-if="activeView === 'reservations'"><section class="reservations-panel incoming-reservations"><div class="reservation-heading"><div><span class="eyebrow">Workflow queue</span><h3>Incoming reservations</h3></div><span>{{ allReservations.length }} total</span></div><article v-for="reservation in allReservations" :key="`incoming-${reservation.id}`" class="reservation-card"><div><strong>{{ reservation.reference_number || reservation.id }}</strong><small>{{ reservation.guest_name }} · {{ reservation.check_in }}</small></div><div><strong>{{ reservation.villa_name || reservation.villa_type_name || 'Awaiting room assignment' }}</strong><small>{{ reservation.booking_status }} · {{ reservation.payment_status }}</small></div></article><p v-if="!allReservations.length" class="empty-state">No incoming reservations.</p></section>
-        <div class="dashboard-toolbar"><div><h2>Reservations</h2><p>Track guest arrivals across {{ villas.length }} properties.</p></div></div><section class="reservations-panel"><div v-if="!selectedVilla" class="empty-state">Select a property from Properties to see reservations.</div><template v-else><div class="reservation-heading"><div><span class="eyebrow">Selected property</span><h3>{{ selectedVilla.name }}</h3></div><button class="text-link" type="button" @click="activeView = 'properties'">Change property ↗</button></div><div v-for="reservation in reservations" :key="reservation.id" class="reservation-card"><div class="reservation-date"><strong>{{ new Date(reservation.check_in).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }}</strong><small>check-in</small></div><div class="reservation-guest"><span class="guest-avatar">{{ reservation.guest_name.charAt(0) }}</span><div><strong>{{ reservation.guest_name }}</strong><small>{{ reservation.guest_email }} · {{ reservation.check_out }}</small></div></div><select :value="reservation.booking_status" aria-label="Reservation status" @change="updateStatus(reservation, $event.target.value)"><option v-for="status in ['pending', 'confirmed', 'checked_in', 'checked_out', 'cancelled']" :key="status" :value="status">{{ status.replace('_', ' ') }}</option></select></div><p v-if="!reservations.length" class="empty-state">No reservations for this property yet.</p></template></section>
-      </template>
       <template v-else-if="activeView === 'services'"><div class="dashboard-toolbar"><div><h2>Services</h2><p>Manage the island extras guests can discover on the public site.</p></div><button class="dashboard-primary" type="button" @click="openServiceCreate">＋ Add service</button></div><div class="services-admin-layout"><section class="account-form-panel"><span class="eyebrow">{{ selectedService ? 'Edit service' : 'New service' }}</span><h3>{{ selectedService ? 'Update service' : 'Add a service' }}</h3><form class="management-form" @submit.prevent="saveService"><label>Service name<input v-model="serviceForm.title" required></label><label>URL slug<input v-model="serviceForm.slug" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" required></label><label>Description<textarea v-model="serviceForm.description" rows="4" required></textarea></label><label>Image URL<input v-model="serviceForm.imageUrl" type="url"></label><div class="form-columns"><label>Display order<input v-model="serviceForm.sortOrder" type="number" min="0"></label><label class="service-toggle">Published<input v-model="serviceForm.isActive" type="checkbox"></label></div><button class="dashboard-primary" type="submit" :disabled="serviceSaving">{{ serviceSaving ? 'Saving...' : selectedService ? 'Save changes' : 'Create service' }}</button></form></section><section class="accounts-panel services-admin-list"><div class="account-toolbar"><div><h3>Published services</h3><span>{{ services.length }} services</span></div></div><div v-if="!services.length" class="empty-state">No services yet.</div><article v-for="service in services" :key="service.id" class="service-admin-row"><div><strong>{{ service.title }}</strong><small>{{ service.description }}</small></div><span :class="{ inactive: !service.isActive }">{{ service.isActive ? 'Published' : 'Hidden' }}</span><button type="button" @click="openServiceEdit(service)">Edit</button><button type="button" @click="removeService(service)">×</button></article></section></div></template>
       <template v-else-if="activeView === 'accounts'"><div class="dashboard-toolbar"><div><h2>Accounts</h2><p>Create staff access and keep track of every Bersantai guest.</p></div></div><p v-if="accountNotice" class="account-notice" role="status">{{ accountNotice }}</p><div class="accounts-layout"><section class="account-form-panel"><span class="eyebrow">Admin tools</span><h3>{{ accountForm.role === 'host' ? 'Invite a host' : 'Create receptionist account' }}</h3><p class="account-help">{{ accountForm.role === 'host' ? `The host can manage their assigned ${propertyLabel.toLowerCase()} after joining.` : 'Give your front desk team access to assigned villa operations.' }}</p><form class="management-form" @submit.prevent="createAccount"><div class="role-switch"><button :class="{ active: accountForm.role === 'receptionist' }" type="button" @click="resetAccountForm('receptionist')">Receptionist</button><button :class="{ active: accountForm.role === 'host' }" type="button" @click="resetAccountForm('host')">Host invite</button></div><label>Full name<input v-model="accountForm.displayName" required></label><label>Email address<input v-model="accountForm.email" type="email" required></label><label>Temporary password <small>Optional. Leave blank to generate one.</small><input v-model="accountForm.password" type="password" minlength="12"></label><button class="dashboard-primary" type="submit" :disabled="accountSaving">{{ accountSaving ? 'Creating...' : accountForm.role === 'host' ? 'Send host invite' : 'Create receptionist' }}</button></form></section><section class="accounts-panel"><div class="account-toolbar"><div><h3>People</h3><span>{{ accounts.length }} accounts</span></div><select v-model="accountFilter" aria-label="Filter accounts"><option value="all">Everyone</option><option value="guest">Guests</option><option value="host">Hosts</option><option value="receptionist">Receptionists</option><option value="admin">Admins</option></select></div><p v-if="accountLoading" class="empty-state">Loading accounts...</p><div v-else class="account-list"><div v-for="account in visibleAccounts" :key="account.id" class="account-row"><span class="account-avatar">{{ account.displayName?.charAt(0).toUpperCase() || '?' }}</span><div><strong>{{ account.displayName || 'Unnamed guest' }}</strong><small>{{ account.email }}</small></div><span class="account-role">{{ account.role }}</span><span :class="`account-status ${account.accountStatus}`">{{ account.accountStatus }}</span></div><p v-if="!visibleAccounts.length" class="empty-state">No accounts in this group.</p></div></section></div></template>
       <template v-else-if="activeView === 'villa-types'"><div class="dashboard-toolbar"><div><h2>Villa Types</h2><p>Manage the bookable villa options guests can select in Airbnb mode.</p></div><button class="dashboard-primary" type="button" @click="openVillaTypeCreate">＋ Add type</button></div><div class="services-admin-layout"><section class="account-form-panel"><span class="eyebrow">{{ selectedVillaType ? 'Edit Villa Type' : 'New Villa Type' }}</span><h3>{{ selectedVillaType ? 'Update type' : 'Add a type' }}</h3><form class="management-form" @submit.prevent="saveVillaType"><label>Name<input v-model="villaTypeForm.name" required></label><label>URL slug<input v-model="villaTypeForm.slug" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" required></label><label>Description<textarea v-model="villaTypeForm.description" rows="4"></textarea></label><label>Default image URL<input v-model="villaTypeForm.defaultImageUrl" type="url"></label><div class="form-columns"><label>Nightly price<input v-model="villaTypeForm.nightlyPrice" type="number" min="0" step="0.01"></label><label>Guests<input v-model="villaTypeForm.capacity" type="number" min="1"></label><label>Bedrooms<input v-model="villaTypeForm.bedroomCount" type="number" min="0"></label></div><div class="form-columns"><label>Status<select v-model="villaTypeForm.status"><option value="draft">Draft</option><option value="active">Active</option><option value="inactive">Inactive</option></select></label><label>Availability<select v-model="villaTypeForm.availabilityStatus"><option value="available">Available</option><option value="unavailable">Unavailable</option><option value="maintenance">Maintenance</option></select></label></div><div class="amenity-editor"><div class="amenity-heading"><span>Amenities</span><button type="button" @click="addVillaTypeAmenity">＋ Add amenity</button></div><div v-for="(_amenity, index) in villaTypeForm.amenities" :key="`type-amenity-${index}`" class="amenity-input"><input v-model="villaTypeForm.amenities[index]" placeholder="e.g. Mountain view"><button type="button" aria-label="Remove amenity" @click="removeVillaTypeAmenity(index)">×</button></div></div><div class="media-editor"><div class="amenity-heading"><span>Gallery images</span><button type="button" @click="addVillaTypeImage">＋ Add image</button></div><div v-for="(_url, index) in villaTypeForm.galleryUrls" :key="`type-image-${index}`" class="amenity-input"><input v-model="villaTypeForm.galleryUrls[index]" type="url" placeholder="https://..."><button type="button" aria-label="Remove image" @click="removeVillaTypeImage(index)">×</button></div></div><label class="service-toggle">Published<input v-model="villaTypeForm.isActive" type="checkbox"></label><button class="dashboard-primary" type="submit" :disabled="villaTypeSaving">{{ villaTypeSaving ? 'Saving...' : selectedVillaType ? 'Save changes' : 'Create type' }}</button></form></section><section class="accounts-panel services-admin-list"><div class="account-toolbar"><div><h3>Configured types</h3><span>{{ villaTypes.length }} types</span></div></div><div v-if="!villaTypes.length" class="empty-state">No villa types yet.</div><article v-for="villaType in villaTypes" :key="villaType.id" class="service-admin-row"><div><strong>{{ villaType.name }}</strong><small>{{ villaType.description || 'Bookable villa option' }} · {{ formatCurrency(villaType.nightlyPrice) }} / night · {{ villaType.capacity }} guests</small></div><span :class="{ inactive: !villaType.isActive || villaType.status !== 'active' }">{{ villaType.isActive && villaType.status === 'active' ? 'Published' : 'Hidden' }}</span><button type="button" @click="openVillaTypeEdit(villaType)">Edit</button><button type="button" @click="removeVillaType(villaType)">×</button></article></section></div></template>

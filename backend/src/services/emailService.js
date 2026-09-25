@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer';
 import { env, hasSmtpConfig } from '../config/env.js';
 import { ApiError } from '../utils/apiError.js';
+import { getPublicSiteSettings } from '../repositories/settingsRepository.js';
 
 let transporter;
 
@@ -23,7 +24,7 @@ export async function sendBookingVerificationEmail(email, code) {
       from: env.smtp.from,
       to: email,
       subject: `${code} is your Bersantai verification code`,
-      text: `BERSANTAI\n\nConfirm your email\n\nUse ${code} to continue your booking request. This code expires in 10 minutes. If you did not request this code, you can safely ignore this email.\n\nA considered stay, from the first detail.`,
+      text: `BERSANTAI\n\nConfirm your email\n\nUse ${code} to continue your booking request. This code expires in 5 minutes. If you did not request this code, you can safely ignore this email.\n\nA considered stay, from the first detail.`,
       html: `<!doctype html>
 <html lang="en">
   <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Your Bersantai verification code</title></head>
@@ -39,7 +40,7 @@ export async function sendBookingVerificationEmail(email, code) {
           <tr><td style="padding:42px 38px 38px;text-align:center;">
             <div style="color:#b0833e;font-family:Arial,sans-serif;font-size:11px;font-weight:bold;letter-spacing:3px;text-transform:uppercase;">Email verification</div>
             <h1 style="margin:12px 0 14px;color:#173d3a;font-size:32px;font-weight:normal;line-height:1.15;">Confirm your email</h1>
-            <p style="margin:0 auto;max-width:390px;color:#65756d;font-family:Arial,sans-serif;font-size:14px;line-height:1.7;">Use the code below to continue planning your stay. It is valid for the next 10 minutes.</p>
+            <p style="margin:0 auto;max-width:390px;color:#65756d;font-family:Arial,sans-serif;font-size:14px;line-height:1.7;">Use the code below to continue planning your stay. It is valid for the next 5 minutes.</p>
             <div style="margin:30px auto;padding:20px 16px;border:1px solid #d8ddd4;background:#f8faf5;">
               <div style="color:#89958d;font-family:Arial,sans-serif;font-size:10px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;">Your verification code</div>
               <div style="margin-top:10px;color:#176059;font-family:Arial,sans-serif;font-size:32px;font-weight:bold;letter-spacing:8px;">${code}</div>
@@ -129,5 +130,76 @@ export async function sendBookingConfirmationEmail(reservation) {
     });
   } catch (_error) {
     throw new ApiError(502, 'Booking confirmation email could not be sent.');
+  }
+}
+
+export async function sendReservationEventEmail(reservation, event, statement = null) {
+  const eventCopy = {
+    'reservation-confirmed': {
+      subject: `Your booking is confirmed | Bersantai`,
+      label: 'Reservation confirmed',
+      title: 'Your stay is confirmed.',
+      intro: 'We are delighted to confirm your reservation. Your booking details and arrival information are below.'
+    },
+    'check-in-confirmation': {
+      subject: `Welcome to Bersantai | ${reservation.reference_number}`,
+      label: 'Check-in complete',
+      title: 'Your stay has begun.',
+      intro: 'Our team has completed your check-in. We wish you a restful stay.'
+    },
+    'check-out-confirmation': {
+      subject: `Thank you for staying with Bersantai | ${reservation.reference_number}`,
+      label: 'Check-out complete',
+      title: 'Thank you for staying with us.',
+      intro: 'Your check-out is complete. We hope the stay treated you well.'
+    }
+  }[event];
+  if (!eventCopy) throw new ApiError(400, 'Unsupported reservation email type');
+  const settings = await getPublicSiteSettings();
+  const checkIn = reservation.check_in ?? reservation.checkIn;
+  const checkOut = reservation.check_out ?? reservation.checkOut;
+  const reference = reservation.reference_number || reservation.referenceNumber;
+  const guestName = reservation.guest_name || reservation.guestName;
+  const email = reservation.guest_email || reservation.guestEmail;
+  const villaType = reservation.villa_type_name || reservation.villaName || 'Bersantai stay';
+  const villaName = reservation.villa_name || reservation.villaName || '';
+  const room = villaName && villaName !== villaType ? `${villaType} · ${villaName}` : villaType;
+  const guests = Number(reservation.guests || 1);
+  const nights = Math.max(0, Math.round((new Date(`${String(checkOut).slice(0, 10)}T00:00:00Z`) - new Date(`${String(checkIn).slice(0, 10)}T00:00:00Z`)) / 86400000));
+  const checkInTime = reservation.villa_check_in_time || reservation.type_check_in_time || '15:00';
+  const checkOutTime = reservation.villa_check_out_time || reservation.type_check_out_time || '11:00';
+  const actualTime = event === 'check-in-confirmation' ? reservation.actual_check_in : event === 'check-out-confirmation' ? reservation.actual_check_out : null;
+  const amount = statement?.total ?? reservation.total_amount ?? reservation.totalAmount ?? 0;
+  const paymentStatus = reservation.payment_status || reservation.paymentStatus || 'pending';
+  const dateRange = nights === 0 ? formatBookingDate(checkIn) : `${formatBookingDate(checkIn)} - ${formatBookingDate(checkOut)}`;
+  const checkinInfo = event === 'reservation-confirmed' ? `Scheduled check-in: ${formatBookingDate(checkIn)} at ${checkInTime}. Scheduled check-out: ${formatBookingDate(checkOut)} at ${checkOutTime}.` : '';
+  const balance = statement ? `
+Final amount: ${formatBookingMoney(amount)}
+Payments received: ${formatBookingMoney(statement.paymentsTotal)}
+Payment status: ${paymentStatus}` : `
+Booking amount: ${formatBookingMoney(amount)}
+Payment status: ${paymentStatus}`;
+  const subject = `${eventCopy.subject}${reference ? ` | ${reference}` : ''}`;
+  const details = [
+    ['Booking reference', reference], ['Villa type', villaType], ['Assigned villa', villaName || 'To be assigned by reception'],
+    ['Stay dates', dateRange], ['Guests', String(guests)], ['Nights', String(nights)],
+    ['Booking amount', formatBookingMoney(amount)], ['Payment status', paymentStatus], ['Booking status', reservation.booking_status || 'confirmed']
+  ];
+  if (actualTime) details.splice(4, 0, ['Actual time', new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(actualTime))]);
+  const rows = details.map(([label, value]) => `<tr><td style="padding:8px 0;color:#65756d;">${escapeHtml(label)}</td><td align="right" style="padding:8px 0;color:#173d3a;">${escapeHtml(value)}</td></tr>`).join('');
+  const contact = [settings.email, settings.contactNumber, settings.address].filter(Boolean).map(escapeHtml).join(' · ');
+  const extraCheckin = checkinInfo ? `<p style="margin:22px 0 0;color:#52605a;font:14px/1.7 Arial,sans-serif;">${escapeHtml(checkinInfo)}</p>` : '';
+  const balanceText = statement ? `\nOutstanding balance: ${formatBookingMoney(statement.balance)}` : '';
+
+  try {
+    await getTransporter().sendMail({
+      from: env.smtp.from,
+      to: email,
+      subject,
+      text: `BERSANTAI\n\nHello ${guestName},\n\n${eventCopy.intro}\n\nBooking reference: ${reference}\nVilla: ${room}\nStay: ${dateRange}\nGuests: ${guests}\nNights: ${nights}${checkinInfo ? `\n${checkinInfo}` : ''}${actualTime ? `\nActual time: ${new Date(actualTime).toLocaleString('en')}` : ''}${balance}${balanceText}\n\nContact: ${settings.email} · ${settings.contactNumber}\n\nBersantai`,
+      html: `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${escapeHtml(eventCopy.title)}</title></head><body style="margin:0;background:#f5f2ea;color:#173d3a;font-family:Georgia,'Times New Roman',serif;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f2ea;padding:32px 16px;"><tr><td align="center"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#fffdf8;border:1px solid #d8ddd4;"><tr><td style="background:#173d3a;padding:28px 36px;text-align:center;"><div style="color:#edc873;font:700 11px Arial,sans-serif;letter-spacing:5px;">BERSANTAI</div></td></tr><tr><td style="padding:36px;"><div style="color:#b0833e;font:700 10px Arial,sans-serif;letter-spacing:3px;text-transform:uppercase;">${escapeHtml(eventCopy.label)}</div><h1 style="margin:12px 0;color:#173d3a;font-size:32px;font-weight:normal;">${escapeHtml(eventCopy.title)}</h1><p style="margin:0 0 24px;color:#65756d;font:14px/1.7 Arial,sans-serif;">Hello ${escapeHtml(guestName)}, ${escapeHtml(eventCopy.intro)}</p><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font:13px/1.6 Arial,sans-serif;">${rows}</table>${extraCheckin}${statement ? `<div style="border-top:1px solid #d8ddd4;margin-top:22px;padding-top:16px;font:14px Arial,sans-serif;"><p>Final amount <strong style="float:right;">${formatBookingMoney(amount)}</strong></p><p>Payments received <strong style="float:right;">${formatBookingMoney(statement.paymentsTotal)}</strong></p><p>Outstanding balance <strong style="float:right;">${formatBookingMoney(statement.balance)}</strong></p></div>` : ''}<p style="margin:24px 0 0;color:#65756d;font:13px/1.7 Arial,sans-serif;">${contact}</p></td></tr><tr><td style="border-top:1px solid #e3e7e0;padding:20px 36px;text-align:center;color:#8b652c;font:11px Arial,sans-serif;">A considered stay, from the first detail.</td></tr></table></td></tr></table></body></html>`
+    });
+  } catch (_error) {
+    throw new ApiError(502, 'Reservation notification email could not be sent.');
   }
 }
